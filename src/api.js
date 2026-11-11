@@ -1,0 +1,212 @@
+import { supabase } from './supabase.js';
+
+const BUCKET = 'arquivos';
+
+function fail(error) {
+  if (error) throw new Error(error.message || 'Erro ao falar com o servidor');
+}
+
+export function localDay(iso) {
+  const d = new Date(iso);
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+const byOrdem = (a, b) => (a.ordem || 0) - (b.ordem || 0);
+
+function mapOS(o) {
+  if (!o) return null;
+  return {
+    id: o.id,
+    data: o.data_servico,
+    checkin: o.checkin_em ? Date.parse(o.checkin_em) : null,
+    tools: o.ferramentas || {},
+    extras: o.ferramenta_extra || '',
+    gargalos: o.gargalos || [],
+    fim: o.finalizada_em ? Date.parse(o.finalizada_em) : null,
+    itens: (o.os_itens || []).slice().sort(byOrdem).map((i) => ({
+      id: i.id,
+      nome: i.nome,
+      tipo: i.tipo,
+      min: i.minutos_previstos,
+      real: (i.segundos_acumulados || 0) * 1000,
+      running: !!i.retomado_em,
+      since: i.retomado_em ? Date.parse(i.retomado_em) : null,
+      done: !!i.concluido,
+    })),
+  };
+}
+
+function mapBudget(r) {
+  const o = Array.isArray(r.ordens_servico) ? r.ordens_servico[0] : r.ordens_servico;
+  return {
+    id: r.id,
+    n: r.numero,
+    cliente: r.cliente,
+    tel: r.telefone || '',
+    bairro: r.bairro || '',
+    cobrado: Number(r.valor_cobrado),
+    fotoPath: r.foto_path || null,
+    fotoData: null,
+    status: r.status,
+    data: localDay(r.created_at),
+    itens: (r.orcamento_itens || []).slice().sort(byOrdem).map((i) => ({ nome: i.nome, tipo: i.tipo, min: i.minutos_previstos })),
+    os: mapOS(o),
+  };
+}
+
+/* ---------- arquivos ---------- */
+function dataUrlToBlob(u) {
+  const [head, b64] = u.split(',');
+  const mime = /data:(.*?);/.exec(head)[1];
+  const bin = atob(b64);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return new Blob([arr], { type: mime });
+}
+
+export async function uploadImage(path, dataUrl) {
+  const blob = dataUrlToBlob(dataUrl);
+  const { error } = await supabase.storage.from(BUCKET).upload(path, blob, { upsert: true, contentType: blob.type });
+  fail(error);
+  return path;
+}
+
+export async function downloadAsDataUrl(path) {
+  const { data, error } = await supabase.storage.from(BUCKET).download(path);
+  fail(error);
+  return await new Promise((res, rej) => {
+    const fr = new FileReader();
+    fr.onload = () => res(fr.result);
+    fr.onerror = () => rej(new Error('Falha ao ler a imagem'));
+    fr.readAsDataURL(data);
+  });
+}
+
+/* ---------- carga inicial ---------- */
+export async function loadAll(userId) {
+  let { data: p, error } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
+  fail(error);
+  if (!p) {
+    const ins = await supabase.from('profiles').insert({ id: userId }).select().single();
+    fail(ins.error);
+    p = ins.data;
+  }
+  const { data: rows, error: e2 } = await supabase
+    .from('orcamentos')
+    .select('*, orcamento_itens(*), ordens_servico(*, os_itens(*))')
+    .order('numero', { ascending: false });
+  fail(e2);
+  let logo = null;
+  if (p.logo_path) {
+    try { logo = await downloadAsDataUrl(p.logo_path); } catch (e) { logo = null; }
+  }
+  return {
+    profile: {
+      nome: p.nome_negocio || '',
+      logoPath: p.logo_path,
+      meta: Number(p.meta_mensal),
+      custos: Number(p.custos_mensais),
+      dias: Number(p.dias_mes),
+      hdia: Number(p.horas_dia),
+    },
+    logo,
+    budgets: rows.map(mapBudget),
+  };
+}
+
+/* ---------- perfil ---------- */
+export async function saveProfile(userId, v) {
+  const patch = {};
+  if ('nome' in v) patch.nome_negocio = v.nome;
+  if ('meta' in v) patch.meta_mensal = v.meta;
+  if ('custos' in v) patch.custos_mensais = v.custos;
+  if ('dias' in v) patch.dias_mes = v.dias;
+  if ('hdia' in v) patch.horas_dia = v.hdia;
+  if ('logoPath' in v) patch.logo_path = v.logoPath;
+  const { error } = await supabase.from('profiles').update(patch).eq('id', userId);
+  fail(error);
+}
+
+/* ---------- orçamentos ---------- */
+export async function createBudget(userId, d) {
+  let fotoPath = null;
+  if (d.foto) {
+    fotoPath = `${userId}/fotos/${crypto.randomUUID()}.jpg`;
+    await uploadImage(fotoPath, d.foto);
+  }
+  const { data: o, error } = await supabase
+    .from('orcamentos')
+    .insert({ cliente: d.cliente, telefone: d.tel, bairro: d.bairro, valor_cobrado: d.cobrado, foto_path: fotoPath })
+    .select()
+    .single();
+  fail(error);
+  const itens = d.itens.map((i, k) => ({ orcamento_id: o.id, ordem: k, nome: i.nome, tipo: i.tipo, minutos_previstos: i.min }));
+  const { error: e2 } = await supabase.from('orcamento_itens').insert(itens);
+  if (e2) {
+    await supabase.from('orcamentos').delete().eq('id', o.id);
+    fail(e2);
+  }
+  const b = mapBudget({ ...o, orcamento_itens: itens.map((i) => ({ ...i })), ordens_servico: null });
+  b.fotoData = d.foto || null;
+  return b;
+}
+
+export async function setStatus(id, status) {
+  const { error } = await supabase.from('orcamentos').update({ status }).eq('id', id);
+  fail(error);
+}
+
+export async function approve(b, dataServico) {
+  const { data: o, error } = await supabase
+    .from('ordens_servico')
+    .insert({ orcamento_id: b.id, data_servico: dataServico })
+    .select()
+    .single();
+  fail(error);
+  const rows = b.itens.map((i, k) => ({ ordem_id: o.id, ordem: k, nome: i.nome, tipo: i.tipo, minutos_previstos: i.min }));
+  const { data: its, error: e2 } = await supabase.from('os_itens').insert(rows).select();
+  if (e2) {
+    await supabase.from('ordens_servico').delete().eq('id', o.id);
+    fail(e2);
+  }
+  await setStatus(b.id, 'aprovado');
+  return mapOS({ ...o, os_itens: its });
+}
+
+/* ---------- ordem de serviço ---------- */
+export async function updateOS(osId, v) {
+  const patch = {};
+  if ('data' in v) patch.data_servico = v.data || null;
+  if ('checkin' in v) patch.checkin_em = v.checkin ? new Date(v.checkin).toISOString() : null;
+  if ('tools' in v) patch.ferramentas = v.tools;
+  if ('extras' in v) patch.ferramenta_extra = v.extras;
+  if ('gargalos' in v) patch.gargalos = v.gargalos;
+  if ('fim' in v) patch.finalizada_em = v.fim ? new Date(v.fim).toISOString() : null;
+  const { error } = await supabase.from('ordens_servico').update(patch).eq('id', osId);
+  fail(error);
+}
+
+export async function updateItem(id, v) {
+  const patch = {};
+  if ('real' in v) patch.segundos_acumulados = Math.round(v.real / 1000);
+  if ('since' in v) patch.retomado_em = v.since ? new Date(v.since).toISOString() : null;
+  if ('done' in v) patch.concluido = v.done;
+  const { error } = await supabase.from('os_itens').update(patch).eq('id', id);
+  fail(error);
+}
+
+/* ---------- login ---------- */
+export async function entrar(email, senha) {
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password: senha });
+  fail(error);
+  return data.session;
+}
+export async function criarConta(email, senha) {
+  const { data, error } = await supabase.auth.signUp({ email, password: senha });
+  fail(error);
+  return data;
+}
+export async function sair() {
+  await supabase.auth.signOut();
+}
