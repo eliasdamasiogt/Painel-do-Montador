@@ -131,3 +131,6 @@ body{margin:0;min-height:100vh;-webkit-text-size-adjust:100%}
 .err{color:var(--bad);font-size:13.5px;min-height:20px;margin:0}
 .spin{display:grid;place-items:center;min-height:60vh;color:var(--muted)}
 .linkbtn{background:none;border:0;color:var(--champ);text-decoration:underline;padding:8px 0;min-height:40px}
+
+/* garante que elementos com o atributo hidden realmente sumam */
+[hidden]{display:none!important}
