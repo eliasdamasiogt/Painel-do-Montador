@@ -185,6 +185,12 @@ export async function signedUrl(path, seconds) {
   const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(path, seconds);
   fail(error); return data.signedUrl;
 }
+export async function deleteBudget(id, paths) {
+  // lançamentos ainda não pagos/recebidos ligados a este orçamento saem junto; os já pagos ficam no caixa
+  let r = await supabase.from('lancamentos').delete().eq('orcamento_id', id).eq('pago', false); fail(r.error);
+  r = await supabase.from('orcamentos').delete().eq('id', id); fail(r.error);
+  if (paths && paths.length) { try { await supabase.storage.from(BUCKET).remove(paths); } catch (e) { /* arquivo órfão não é problema */ } }
+}
 export async function setTel(id, tel) {
   const { error } = await supabase.from('orcamentos').update({ telefone: tel }).eq('id', id);
   fail(error);

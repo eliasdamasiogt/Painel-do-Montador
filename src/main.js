@@ -270,7 +270,7 @@ function renderOrcamentos() {
         (s === 'enviado' ? '<button class="btn sm ok" data-a="aprovar" data-id="' + b.id + '">Aprovado</button><button class="btn sm no" data-a="recusar" data-id="' + b.id + '">Recusou</button>' : '') +
         (s === 'aprovado' ? '<button class="btn sm" data-a="openos" data-id="' + b.id + '">Abrir OS</button>' : '') +
         (s === 'concluido' ? '<button class="btn sm" data-a="openos" data-id="' + b.id + '">Ver resultado</button>' : '') +
-        '</div></div>';
+        '<button class="btn ghost sm del" data-a="delorc" data-id="' + b.id + '">Excluir</button></div></div>';
     }).join('') + '</div>' : '<div class="card muted">Nenhum orçamento ainda. Toque em "Novo orçamento".</div>');
 }
 
@@ -303,7 +303,7 @@ function renderServico() {
   const b = curB(), el = $('#v-servico');
   if (!b) { el.innerHTML = '<h1>Serviço do dia</h1><div class="card muted">Nenhuma ordem de serviço aberta. Aprove um orçamento na aba Orçamentos.</div>'; return; }
   const os = b.os, fim = !!os.fim, allDone = os.itens.every((i) => i.done);
-  el.innerHTML = '<h1>' + esc(b.cliente) + '</h1><p class="sub">' + esc(b.bairro || '') + ' · OS do orçamento Nº ' + String(b.n).padStart(4, '0') + ' · ' + brl(b.cobrado) + '</p>' +
+  el.innerHTML = '<button class="linkbtn" style="text-decoration:none;padding:0" data-a="goto" data-v="orcamentos">‹ Orçamentos</button><h1 style="margin-top:6px">' + esc(b.cliente) + '</h1><p class="sub">' + esc(b.bairro || '') + ' · OS do orçamento Nº ' + String(b.n).padStart(4, '0') + ' · ' + brl(b.cobrado) + '</p>' +
     '<div class="card stack"><div class="grid2"><label class="field"><span class="lbl">Data do serviço</span><input class="in" type="date" id="os-data" value="' + esc(os.data || '') + '"></label>' +
     '<div><span class="lbl">Chegada</span>' + (os.checkin ? '<div class="num" style="padding:10px 0">' + new Date(os.checkin).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) + '</div>' : '<button class="btn sm block" data-a="checkin"' + (fim ? ' disabled' : '') + '>Check-in</button>') + '</div></div></div>' +
     '<h2>Ferramentas</h2><div class="card"><div class="grid2">' + TOOLS.map((t) => '<label class="chk"><input type="checkbox" data-tool="' + esc(t) + '"' + (os.tools[t] !== false ? ' checked' : '') + '> <span>' + esc(t) + '</span></label>').join('') + '</div>' +
@@ -314,7 +314,8 @@ function renderServico() {
       return '<div class="svc stack" style="gap:8px"><div class="row" style="justify-content:space-between;flex-wrap:nowrap"><div style="min-width:0"><b>' + esc(i.nome) + '</b><div class="muted small">' + esc(i.tipo) + ' · previsto ' + fh(i.min) + '</div></div>' + stt + '</div>' +
         '<div class="row" style="justify-content:space-between"><span class="clock" data-tick="' + k + '">' + clock(elapsed(i)) + '</span><div class="row">' + ctl + '</div></div></div>';
     }).join('') + '</div>' +
-    (fim ? resultHTML(b) : '<button class="btn block" style="margin-top:18px" data-a="encerrar"' + (allDone ? '' : ' disabled') + '>Encerrar serviço e ver resultado</button>' + (allDone ? '' : '<p class="small muted" style="margin:8px 2px 0">Conclua todos os serviços para ver o resultado.</p>'));
+    (fim ? resultHTML(b) : '<button class="btn block" style="margin-top:18px" data-a="encerrar"' + (allDone ? '' : ' disabled') + '>Encerrar serviço e ver resultado</button>' + (allDone ? '' : '<p class="small muted" style="margin:8px 2px 0">Conclua todos os serviços para ver o resultado.</p>')) +
+    '<div style="margin-top:28px"><button class="btn ghost sm del" data-a="delorc" data-id="' + b.id + '">Excluir este serviço</button></div>';
 }
 function resultHTML(b) {
   const os = b.os, rm = realMin(os), pm = totalMin(b.itens), eff = rm > 0 ? b.cobrado / (rm / 60) : 0, vh = hourly(), pct = vh > 0 ? eff / vh : 0;
@@ -374,6 +375,22 @@ document.addEventListener('click', async (e) => {
         const b = await api.createBudget(S.uid, { cliente: d.cliente.trim(), tel: d.tel, bairro: d.bairro, cobrado: d.cobrado == null ? sug : d.cobrado, foto: d.foto, itens: its.map((x) => ({ nome: x.nome.trim(), tipo: x.tipo, min: +x.min })) });
         S.budgets.push(b); S.draft = emptyDraft(); go('orcamentos'); showSheet(b.id);
       } catch (err) { t.disabled = false; t.textContent = 'Gerar orçamento'; toast('Não consegui salvar o orçamento. Tente de novo.'); }
+      return;
+    }
+    if (a === 'delorc') {
+      if (t.dataset.arm !== '1') {
+        const txt = t.textContent; t.dataset.arm = '1'; t.textContent = 'Toque de novo para excluir'; t.classList.add('arm');
+        setTimeout(() => { t.dataset.arm = ''; t.textContent = txt; t.classList.remove('arm'); }, 3500); return;
+      }
+      const bb = S.budgets.filter((x) => x.id === id)[0]; if (!bb) return;
+      const paths = [bb.fotoPath, S.uid + '/pdf/orcamento-' + bb.id + '.pdf'].filter(Boolean);
+      t.disabled = true;
+      try { await api.deleteBudget(id, paths); } catch (er) { t.disabled = false; throw er; }
+      S.budgets = S.budgets.filter((x) => x.id !== id);
+      S.lanc = S.lanc.filter((l) => !(l.orcId === id && !l.pago));
+      if (S.osId === id) { const at = S.budgets.filter((x) => x.status === 'aprovado')[0]; S.osId = at ? at.id : null; }
+      $('#sheet').hidden = true; toast('Excluído');
+      if (location.hash === '#servico') go('orcamentos'); else route();
       return;
     }
     if (a === 'ver') { showSheet(id); return; }
