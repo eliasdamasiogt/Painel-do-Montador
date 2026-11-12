@@ -69,26 +69,24 @@ export async function gerarPDF({ b, nome, logo, foto }) {
   const val = new Date(b.data + 'T12:00:00'); val.setDate(val.getDate() + 7);
   const vd = `${String(val.getDate()).padStart(2, '0')}/${String(val.getMonth() + 1).padStart(2, '0')}/${val.getFullYear()}`;
 
-  // Dados do cliente
+  // Dados do cliente, com a foto do móvel à direita, sem moldura
+  const fim = foto ? await loadImg(foto) : null;
+  const ps = fim ? fit(fim, 70, 70) : null;
+  const valW = (ps ? W - M - ps.w - 6 : W - M) - (M + 28);
   const rows = [['Cliente', b.cliente], ['Contato', b.tel || '-'], ['Bairro', b.bairro || '-'], ['Emissão', fdate(b.data)], ['Validade', vd]];
   let y = 67;
   doc.setFontSize(10.5);
   rows.forEach(([k, v]) => {
     doc.setFont('helvetica', 'normal'); ink(C.muted); doc.text(k, M, y);
-    doc.setFont('helvetica', 'bold'); ink(C.text); doc.text(String(v), M + 28, y);
+    doc.setFont('helvetica', 'bold'); ink(C.text);
+    doc.text(doc.splitTextToSize(String(v), valW)[0], M + 28, y);
     y += 7;
   });
-  y += 4;
-
-  // Foto do móvel
-  const fim = foto ? await loadImg(foto) : null;
-  if (fim) {
-    const bw = W - M * 2, bh = 62;
-    fill(C.surface); doc.roundedRect(M, y, bw, bh, 2, 2, 'F');
-    const s = fit(fim, bw - 6, bh - 6);
-    doc.addImage(foto, fmt(foto), M + (bw - s.w) / 2, y + (bh - s.h) / 2, s.w, s.h);
-    y += bh + 10;
+  if (ps) {
+    doc.addImage(foto, fmt(foto), W - M - ps.w, 52, ps.w, ps.h);
+    y = Math.max(y, 52 + ps.h + 4);
   }
+  y += 6;
 
   // Serviços
   doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); ink(C.champ);

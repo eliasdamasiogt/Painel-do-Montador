@@ -97,6 +97,12 @@ export async function loadAll(userId) {
     .select('*, orcamento_itens(*), ordens_servico(*, os_itens(*))')
     .order('numero', { ascending: false });
   fail(e2);
+  const [tb, lc, dp] = await Promise.all([
+    supabase.from('tabela_referencia').select('*').order('grupo', { ascending: true }).order('ordem', { ascending: true }),
+    supabase.from('lancamentos').select('*').order('data', { ascending: false }).order('created_at', { ascending: false }),
+    supabase.from('disponibilidade').select('*'),
+  ]);
+  fail(tb.error); fail(lc.error); fail(dp.error);
   let logo = null;
   if (p.logo_path) {
     try { logo = await downloadAsDataUrl(p.logo_path); } catch (e) { logo = null; }
@@ -112,7 +118,76 @@ export async function loadAll(userId) {
     },
     logo,
     budgets: rows.map(mapBudget),
+    tabela: tb.data.map(mapRef),
+    lanc: lc.data.map(mapLanc),
+    disp: Object.fromEntries(dp.data.map((r) => [r.data, { status: r.status, nota: r.nota || '' }])),
   };
+}
+
+/* ---------- tabela de referência ---------- */
+function mapRef(r) {
+  return { id: r.id, grupo: r.grupo, nome: r.nome, min: Number(r.preco_min), max: r.preco_max == null ? null : Number(r.preco_max), un: r.unidade || '', mins: r.minutos_sugeridos, ordem: r.ordem };
+}
+export async function saveRef(row) {
+  const body = { grupo: row.grupo, nome: row.nome, preco_min: row.min, preco_max: row.max, unidade: row.un || '', minutos_sugeridos: row.mins, ordem: row.ordem || 0 };
+  if (row.id) {
+    const { data, error } = await supabase.from('tabela_referencia').update(body).eq('id', row.id).select().single();
+    fail(error); return mapRef(data);
+  }
+  const { data, error } = await supabase.from('tabela_referencia').insert(body).select().single();
+  fail(error); return mapRef(data);
+}
+export async function deleteRef(id) {
+  const { error } = await supabase.from('tabela_referencia').delete().eq('id', id);
+  fail(error);
+}
+
+/* ---------- fluxo de caixa ---------- */
+function mapLanc(r) {
+  return { id: r.id, tipo: r.tipo, cat: r.categoria, desc: r.descricao || '', valor: Number(r.valor), data: r.data, pago: !!r.pago, orcId: r.orcamento_id || null };
+}
+export async function createLanc(l) {
+  const { data, error } = await supabase.from('lancamentos')
+    .insert({ tipo: l.tipo, categoria: l.cat, descricao: l.desc || '', valor: l.valor, data: l.data, pago: l.pago, orcamento_id: l.orcId || null })
+    .select().single();
+  fail(error); return mapLanc(data);
+}
+export async function createLancMany(list) {
+  const rows = list.map((l) => ({ tipo: l.tipo, categoria: l.cat, descricao: l.desc || '', valor: l.valor, data: l.data, pago: l.pago }));
+  const { data, error } = await supabase.from('lancamentos').insert(rows).select();
+  fail(error); return data.map(mapLanc);
+}
+export async function setLancPago(id, pago) {
+  const { error } = await supabase.from('lancamentos').update({ pago }).eq('id', id);
+  fail(error);
+}
+export async function deleteLanc(id) {
+  const { error } = await supabase.from('lancamentos').delete().eq('id', id);
+  fail(error);
+}
+
+/* ---------- agenda ---------- */
+export async function setDisp(userId, data, status, nota) {
+  const { error } = await supabase.from('disponibilidade').upsert({ user_id: userId, data, status, nota: nota || '' }, { onConflict: 'user_id,data' });
+  fail(error);
+}
+export async function clearDisp(userId, data) {
+  const { error } = await supabase.from('disponibilidade').delete().eq('user_id', userId).eq('data', data);
+  fail(error);
+}
+
+/* ---------- envio do orçamento ---------- */
+export async function uploadPdf(path, blob) {
+  const { error } = await supabase.storage.from(BUCKET).upload(path, blob, { upsert: true, contentType: 'application/pdf' });
+  fail(error);
+}
+export async function signedUrl(path, seconds) {
+  const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(path, seconds);
+  fail(error); return data.signedUrl;
+}
+export async function setTel(id, tel) {
+  const { error } = await supabase.from('orcamentos').update({ telefone: tel }).eq('id', id);
+  fail(error);
 }
 
 /* ---------- perfil ---------- */
