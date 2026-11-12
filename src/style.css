@@ -189,3 +189,16 @@ body{margin:0;min-height:100vh;-webkit-text-size-adjust:100%}
 .runban .clock{font-family:var(--display);font-weight:600;color:var(--champ-hi)}
 .live{width:9px;height:9px;border-radius:50%;background:var(--bronze-hi);animation:pulse 1.4s infinite}
 @keyframes pulse{50%{opacity:.25}}
+
+/* tabela de referência: linha organizada */
+.trow{display:block;padding:14px 0;border-bottom:1px solid var(--line)}
+.trow:last-child{border-bottom:0}
+.trow .tn{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.trow .tn b{font-size:15px;line-height:1.35;font-weight:600;min-width:0}
+.tedit{flex:none;width:36px;height:36px;border-radius:10px;border:1px solid var(--line);color:var(--champ);display:grid;place-items:center;background:var(--surface-2)}
+.tedit:active{border-color:var(--bronze-hi)}
+.trow .tp2{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-top:6px;flex-wrap:wrap}
+.tprice{font-family:var(--display);font-weight:600;font-size:15px;color:var(--champ-hi)}
+.tmin{font-size:12px;color:var(--muted)}
+.refrow{flex-wrap:wrap;row-gap:2px}
+.refrow .rn{flex:1 1 60%}

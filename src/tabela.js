@@ -42,8 +42,8 @@ export function render(ctx) {
     if (!rows.length) return '';
     return '<h2>' + titulo + '</h2><div class="card" style="padding-top:4px;padding-bottom:4px">' + rows.map((r) => {
       if (S.refEdit === r.id) return editor(ctx, r);
-      return '<div class="trow"><div style="min-width:0"><b>' + esc(r.nome) + '</b><div class="muted small">tempo sugerido ' + ctx.fh(r.mins) + '</div></div>' +
-        '<div class="row" style="flex-wrap:nowrap;gap:8px"><span class="num" style="color:var(--champ-hi);white-space:nowrap">' + fmtRef(r, ctx.brl) + '</span><button class="btn ghost sm" data-a="ref-edit" data-id="' + r.id + '" aria-label="Editar">Editar</button></div></div>';
+      return '<div class="trow"><div class="tn"><b>' + esc(r.nome) + '</b><button class="tedit" data-a="ref-edit" data-id="' + r.id + '" aria-label="Editar ' + esc(r.nome) + '"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></button></div>' +
+        '<div class="tp2"><span class="tprice">' + fmtRef(r, ctx.brl) + '</span><span class="tmin">' + ctx.fh(r.mins) + ' sugerido</span></div></div>';
     }).join('') + '</div>';
   };
   ctx.$('#v-tabela').innerHTML =
