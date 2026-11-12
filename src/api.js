@@ -97,12 +97,13 @@ export async function loadAll(userId) {
     .select('*, orcamento_itens(*), ordens_servico(*, os_itens(*))')
     .order('numero', { ascending: false });
   fail(e2);
-  const [tb, lc, dp] = await Promise.all([
+  const [tb, lc, dp, pr] = await Promise.all([
     supabase.from('tabela_referencia').select('*').order('grupo', { ascending: true }).order('ordem', { ascending: true }),
     supabase.from('lancamentos').select('*').order('data', { ascending: false }).order('created_at', { ascending: false }),
     supabase.from('disponibilidade').select('*'),
+    supabase.from('prompts').select('*').order('ordem', { ascending: true }).order('created_at', { ascending: true }),
   ]);
-  fail(tb.error); fail(lc.error); fail(dp.error);
+  fail(tb.error); fail(lc.error); fail(dp.error); fail(pr.error);
   let logo = null;
   if (p.logo_path) {
     try { logo = await downloadAsDataUrl(p.logo_path); } catch (e) { logo = null; }
@@ -120,6 +121,7 @@ export async function loadAll(userId) {
     budgets: rows.map(mapBudget),
     tabela: tb.data.map(mapRef),
     lanc: lc.data.map(mapLanc),
+    prompts: pr.data.map((r) => ({ id: r.id, titulo: r.titulo, texto: r.texto, ordem: r.ordem })),
     disp: Object.fromEntries(dp.data.map((r) => [r.data, { status: r.status, nota: r.nota || '' }])),
   };
 }
@@ -290,4 +292,19 @@ export async function criarConta(email, senha) {
 }
 export async function sair() {
   await supabase.auth.signOut();
+}
+
+/* ---------- prompts ---------- */
+export async function savePrompt(row) {
+  const body = { titulo: row.titulo, texto: row.texto };
+  if (row.id) {
+    const { data, error } = await supabase.from('prompts').update(body).eq('id', row.id).select().single();
+    fail(error); return { id: data.id, titulo: data.titulo, texto: data.texto, ordem: data.ordem };
+  }
+  const { data, error } = await supabase.from('prompts').insert({ ...body, ordem: row.ordem || 0 }).select().single();
+  fail(error); return { id: data.id, titulo: data.titulo, texto: data.texto, ordem: data.ordem };
+}
+export async function deletePrompt(id) {
+  const { error } = await supabase.from('prompts').delete().eq('id', id);
+  fail(error);
 }

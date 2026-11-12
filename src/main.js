@@ -5,6 +5,7 @@ import { gerarPDF, compartilharPDF } from './pdf.js';
 import * as tabelaMod from './tabela.js';
 import * as caixaMod from './caixa.js';
 import * as agendaMod from './agenda.js';
+import * as promptsMod from './prompts.js';
 
 const $ = (s, r) => (r || document).querySelector(s);
 const $$ = (s, r) => Array.prototype.slice.call((r || document).querySelectorAll(s));
@@ -20,7 +21,7 @@ const GARGALOS = ['Desembalar', 'Organizar peças', 'Erro de montagem', 'Peça f
 
 function dayStr(add) { const d = new Date(); d.setDate(d.getDate() + add); return api.localDay(d.toISOString()); }
 const emptyDraft = () => ({ cliente: '', tel: '', bairro: '', itens: [], cobrado: null, foto: null });
-const blank = () => ({ uid: null, email: '', logo: null, logoPath: null, nome: '', meta: 4000, custos: 0, dias: 12, hdia: 6, budgets: [], tabela: [], lanc: [], disp: {}, draft: emptyDraft(), osId: null });
+const blank = () => ({ uid: null, email: '', logo: null, logoPath: null, nome: '', meta: 4000, custos: 0, dias: 12, hdia: 6, budgets: [], tabela: [], lanc: [], prompts: [], disp: {}, draft: emptyDraft(), osId: null });
 let S = blank();
 
 /* ---------- utilidades ---------- */
@@ -165,7 +166,7 @@ function linkCard(v, titulo, sub) {
 function renderMais() {
   $('#v-mais').innerHTML =
     '<h1>Mais</h1><p class="sub">Ajustes e ferramentas de apoio.</p>' +
-    '<div class="stack">' + linkCard('valor', 'Valor-hora', 'Quanto você precisa cobrar por hora') + linkCard('tabela', 'Tabela de referência', 'Preços médios do mercado por móvel') + '</div>' +
+    '<div class="stack">' + linkCard('valor', 'Valor-hora', 'Quanto você precisa cobrar por hora') + linkCard('tabela', 'Tabela de referência', 'Preços médios do mercado por móvel') + linkCard('prompts', 'Prompts', 'Textos prontos para copiar e usar na sua IA') + '</div>' +
     '<h2>Sua marca</h2>' +
     '<div class="card row" style="flex-wrap:nowrap;align-items:center"><button class="slot big" data-a="logo" aria-label="Enviar sua logo">' + logoHTML(true) + '</button><label class="field" style="flex:1"><span class="lbl">Nome no orçamento</span><input class="in" id="nome" value="' + esc(S.nome) + '" placeholder="Seu nome ou empresa"></label></div>' +
     '<p class="small muted" style="margin:8px 2px 0">A logo e o nome aparecem no cabeçalho e no PDF do orçamento.</p>' +
@@ -337,9 +338,9 @@ const ctx = {
 };
 const VIEWS = {
   inicio: renderInicio, orcar: renderOrcar, orcamentos: renderOrcamentos, servico: renderServico, valor: renderValor, mais: renderMais,
-  agenda: () => agendaMod.render(ctx), caixa: () => caixaMod.render(ctx), tabela: () => tabelaMod.render(ctx),
+  agenda: () => agendaMod.render(ctx), caixa: () => caixaMod.render(ctx), tabela: () => tabelaMod.render(ctx), prompts: () => promptsMod.render(ctx),
 };
-const TABMAP = { orcar: 'orcamentos', servico: 'inicio', valor: 'mais', tabela: 'mais' };
+const TABMAP = { orcar: 'orcamentos', servico: 'inicio', valor: 'mais', tabela: 'mais', prompts: 'mais' };
 function route() {
   if (!S.uid) return;
   let v = location.hash.slice(1); if (!VIEWS[v]) v = 'inicio';
@@ -347,7 +348,7 @@ function route() {
   $$('[data-view]').forEach((el) => el.classList.toggle('on', el.id === 'v-' + v));
   $$('#tabs a').forEach((el) => el.classList.toggle('on', el.getAttribute('data-t') === tab));
   VIEWS[v]();
-  if (v === 'valor' || v === 'tabela') $('#v-' + v).insertAdjacentHTML('afterbegin', '<button class="linkbtn" style="text-decoration:none;padding:0 0 6px" data-a="goto" data-v="mais">‹ Mais</button>');
+  if (v === 'valor' || v === 'tabela' || v === 'prompts') $('#v-' + v).insertAdjacentHTML('afterbegin', '<button class="linkbtn" style="text-decoration:none;padding:0 0 6px" data-a="goto" data-v="mais">‹ Mais</button>');
   renderTop(); window.scrollTo(0, 0);
 }
 function go(v) { if (location.hash === '#' + v) route(); else location.hash = '#' + v; }
@@ -438,6 +439,7 @@ document.addEventListener('click', async (e) => {
     if (a === 'recusar') { const bb = S.budgets.filter((x) => x.id === id)[0]; await api.setStatus(id, 'recusado'); bb.status = 'recusado'; renderOrcamentos(); return; }
     if (a === 'openos') { S.osId = id; go('servico'); return; }
     if (await tabelaMod.click(a, t, ctx)) return;
+    if (await promptsMod.click(a, t, ctx)) return;
     if (await caixaMod.click(a, t, ctx)) return;
     if (await agendaMod.click(a, t, ctx)) return;
 
@@ -562,7 +564,7 @@ async function start(user) {
     S = blank();
     S.uid = user.id; S.email = user.email || '';
     S.nome = r.profile.nome; S.meta = r.profile.meta; S.custos = r.profile.custos; S.dias = r.profile.dias; S.hdia = r.profile.hdia;
-    S.logo = r.logo ? await circleLogo(r.logo) : null; S.logoPath = r.profile.logoPath; S.budgets = r.budgets; S.tabela = r.tabela; S.lanc = r.lanc; S.disp = r.disp;
+    S.logo = r.logo ? await circleLogo(r.logo) : null; S.logoPath = r.profile.logoPath; S.budgets = r.budgets; S.tabela = r.tabela; S.lanc = r.lanc; S.prompts = r.prompts; S.disp = r.disp;
     const ativo = S.budgets.filter((b) => b.status === 'aprovado')[0]; S.osId = ativo ? ativo.id : null;
     show('app'); route();
   } catch (err) {
