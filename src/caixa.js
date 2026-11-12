@@ -41,8 +41,10 @@ export function render(ctx) {
   ctx.$('#v-caixa').innerHTML =
     '<h1>Fluxo de caixa</h1><p class="sub">O que entrou, o que saiu e em que você gastou.</p>' +
     '<div class="cal-head"><button class="navbtn" data-a="cx-prev" aria-label="Mês anterior">‹</button><b class="num" style="font-size:16px">' + MESES[S.cx.m] + ' ' + S.cx.y + '</b><button class="navbtn" data-a="cx-next" aria-label="Próximo mês">›</button></div>' +
-    '<div class="stats" style="margin-top:14px"><div><span class="num" style="color:var(--ok)">' + brl(entrou) + '</span><span class="t">entrou</span></div><div><span class="num" style="color:var(--bad)">' + brl(saiu) + '</span><span class="t">saiu</span></div><div><span class="num">' + brl(saldo) + '</span><span class="t">saldo do mês</span></div></div>' +
-    '<div class="row" style="margin-top:10px;gap:8px"><span class="pill send">A receber ' + brl(aReceber) + '</span><span class="pill no">A pagar ' + brl(aPagar) + '</span></div>' +
+    '<div class="cx-hero"><span class="lbl" style="margin:0">Saldo do mês</span><span class="num cx-saldo" style="color:' + (saldo < 0 ? 'var(--bad)' : 'var(--champ-hi)') + '">' + brl(saldo) + '</span></div>' +
+    '<div class="grid2" style="margin-top:10px"><div class="card cx-box"><span class="t">Entrou</span><span class="num" style="color:var(--ok)">' + brl(entrou) + '</span></div>' +
+    '<div class="card cx-box"><span class="t">Saiu</span><span class="num" style="color:var(--bad)">' + brl(saiu) + '</span></div></div>' +
+    '<div class="row" style="margin-top:12px;gap:8px"><span class="pill send">A receber ' + brl(aReceber) + '</span><span class="pill no">A pagar ' + brl(aPagar) + '</span></div>' +
 
     '<h2>Novo lançamento</h2><div class="card stack">' +
     '<div class="seg"><button class="' + (f.tipo === 'saida' ? 'on' : '') + '" data-a="cx-tipo" data-t="saida">Saída</button><button class="' + (f.tipo === 'entrada' ? 'on' : '') + '" data-a="cx-tipo" data-t="entrada">Entrada</button></div>' +
