@@ -16,13 +16,28 @@ const clock = (ms) => { const s = Math.floor(ms / 1000); return [Math.floor(s / 
 const round5 = (n) => Math.max(0, Math.round(n / 5) * 5);
 
 const MOTIVOS = ['Preço alto', 'Sem disponibilidade de data', 'Escolheu outro montador', 'Desistiu da compra', 'Sem resposta do cliente', 'Vai montar sozinho', 'Outro motivo'];
+const TEMAS = [
+  ['artifex', 'Artifex', ['#0f100f', '#d6c3aa', '#b87a3c']],
+  ['azul', 'Grafite azul', ['#0d1115', '#a9c4dc', '#4d84b6']],
+  ['floresta', 'Floresta', ['#0d110e', '#b9cfae', '#6c9856']],
+  ['vinho', 'Vinho', ['#120d0f', '#dcb6bf', '#b0505f']],
+  ['marfim', 'Marfim (claro)', ['#f5f1e9', '#8a6a3c', '#a8692a']],
+];
+function aplicaTema(id) {
+  if (!TEMAS.some((t) => t[0] === id)) id = 'artifex';
+  document.documentElement.setAttribute('data-tema', id);
+  const meta = document.querySelector('meta[name="theme-color"]'); if (meta) meta.setAttribute('content', TEMAS.filter((t) => t[0] === id)[0][2][0]);
+  try { localStorage.setItem('tema', id); } catch (e) { /* sem armazenamento local */ }
+  return id;
+}
+try { aplicaTema(localStorage.getItem('tema') || 'artifex'); } catch (e) { aplicaTema('artifex'); }
 const TIPOS = ['Montagem', 'Desmontagem e montagem', 'Instalação'];
 const TOOLS = ['Parafusadeira', 'Furadeira', 'Jogo de chaves', 'Martelo de borracha', 'Trena', 'Nível', 'Esquadro', 'Fita crepe'];
 const GARGALOS = ['Desembalar', 'Organizar peças', 'Erro de montagem', 'Peça faltando ou com defeito', 'Retrabalho', 'Celular', 'Deslocamento', 'Falta de ferramenta'];
 
 function dayStr(add) { const d = new Date(); d.setDate(d.getDate() + add); return api.localDay(d.toISOString()); }
 const emptyDraft = () => ({ cliente: '', tel: '', bairro: '', itens: [], cobrado: null, foto: null });
-const blank = () => ({ uid: null, email: '', logo: null, logoPath: null, nome: '', meta: 4000, custos: 0, dias: 12, hdia: 6, budgets: [], tabela: [], lanc: [], prompts: [], disp: {}, draft: emptyDraft(), osId: null });
+const blank = () => ({ uid: null, email: '', tema: 'artifex', logo: null, logoPath: null, nome: '', meta: 4000, custos: 0, dias: 12, hdia: 6, budgets: [], tabela: [], lanc: [], prompts: [], disp: {}, draft: emptyDraft(), osId: null });
 let S = blank();
 
 /* ---------- utilidades ---------- */
@@ -198,6 +213,8 @@ function renderMais() {
     '<h2>Sua marca</h2>' +
     '<div class="card row" style="flex-wrap:nowrap;align-items:center"><button class="slot big" data-a="logo" aria-label="Enviar sua logo">' + logoHTML(true) + '</button><label class="field" style="flex:1"><span class="lbl">Nome no orçamento</span><input class="in" id="nome" value="' + esc(S.nome) + '" placeholder="Seu nome ou empresa"></label></div>' +
     '<p class="small muted" style="margin:8px 2px 0">A logo e o nome aparecem no cabeçalho e no PDF do orçamento.</p>' +
+    '<h2>Aparência</h2><div class="tema-grid">' + TEMAS.map((t) => '<button class="tema' + (S.tema === t[0] ? ' on' : '') + '" data-a="tema" data-t="' + t[0] + '" aria-label="Tema ' + t[1] + '"><span class="sw">' + t[2].map((c) => '<i style="background:' + c + '"></i>').join('') + '</span><b>' + t[1] + '</b>' + (S.tema === t[0] ? '<span class="ck">✓</span>' : '') + '</button>').join('') + '</div>' +
+    '<p class="small muted" style="margin:8px 2px 0">O tema vale para o app. O PDF do orçamento mantém o visual escuro premium.</p>' +
     '<h2>Conta</h2><div class="card row" style="justify-content:space-between"><span class="muted small" style="overflow-wrap:anywhere;min-width:0">' + esc(S.email) + '</span><button class="btn ghost sm" data-a="sair">Sair</button></div>';
 }
 
@@ -393,6 +410,7 @@ document.addEventListener('click', async (e) => {
     if (a === 'logo') { $('#logoFile').click(); return; }
     if (a === 'foto') { $('#fotoFile').click(); return; }
     if (a === 'sair') { await api.sair(); return; }
+    if (a === 'tema') { S.tema = aplicaTema(t.getAttribute('data-t')); bg(api.saveProfile(S.uid, { tema: S.tema })); renderMais(); return; }
     if (a === 'goto') { go(t.getAttribute('data-v')); return; }
     if (a === 'addrow') { S.draft.itens.push({ nome: '', tipo: 'Montagem', min: 60 }); drawRows(); updOrc(); return; }
     if (a === 'delrow') { S.draft.itens.splice(i, 1); drawRows(); updOrc(); return; }
@@ -602,7 +620,7 @@ async function start(user) {
     const r = await api.loadAll(user.id);
     S = blank();
     S.uid = user.id; S.email = user.email || '';
-    S.nome = r.profile.nome; S.meta = r.profile.meta; S.custos = r.profile.custos; S.dias = r.profile.dias; S.hdia = r.profile.hdia;
+    S.nome = r.profile.nome; S.tema = aplicaTema(r.profile.tema); S.meta = r.profile.meta; S.custos = r.profile.custos; S.dias = r.profile.dias; S.hdia = r.profile.hdia;
     S.logo = r.logo ? await circleLogo(r.logo) : null; S.logoPath = r.profile.logoPath; S.budgets = r.budgets; S.tabela = r.tabela; S.lanc = r.lanc; S.prompts = r.prompts; S.disp = r.disp;
     const ativo = S.budgets.filter((b) => b.status === 'aprovado')[0]; S.osId = ativo ? ativo.id : null;
     show('app'); route();

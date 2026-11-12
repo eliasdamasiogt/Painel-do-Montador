@@ -113,6 +113,7 @@ export async function loadAll(userId) {
   return {
     profile: {
       nome: p.nome_negocio || '',
+      tema: p.tema || 'artifex',
       logoPath: p.logo_path,
       meta: Number(p.meta_mensal),
       custos: Number(p.custos_mensais),
@@ -208,6 +209,7 @@ export async function saveProfile(userId, v) {
   if ('custos' in v) patch.custos_mensais = v.custos;
   if ('dias' in v) patch.dias_mes = v.dias;
   if ('hdia' in v) patch.horas_dia = v.hdia;
+  if ('tema' in v) patch.tema = v.tema;
   if ('logoPath' in v) patch.logo_path = v.logoPath;
   const { error } = await supabase.from('profiles').update(patch).eq('id', userId);
   fail(error);
