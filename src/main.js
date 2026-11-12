@@ -15,6 +15,7 @@ const fh = (m) => { m = Math.round(m); const h = Math.floor(m / 60), r = m % 60;
 const clock = (ms) => { const s = Math.floor(ms / 1000); return [Math.floor(s / 3600), Math.floor((s % 3600) / 60), s % 60].map((v) => String(v).padStart(2, '0')).join(':'); };
 const round5 = (n) => Math.max(0, Math.round(n / 5) * 5);
 
+const MOTIVOS = ['Preço alto', 'Sem disponibilidade de data', 'Escolheu outro montador', 'Desistiu da compra', 'Sem resposta do cliente', 'Vai montar sozinho', 'Outro motivo'];
 const TIPOS = ['Montagem', 'Desmontagem e montagem', 'Instalação'];
 const TOOLS = ['Parafusadeira', 'Furadeira', 'Jogo de chaves', 'Martelo de borracha', 'Trena', 'Nível', 'Esquadro', 'Fita crepe'];
 const GARGALOS = ['Desembalar', 'Organizar peças', 'Erro de montagem', 'Peça faltando ou com defeito', 'Retrabalho', 'Celular', 'Deslocamento', 'Falta de ferramenta'];
@@ -136,6 +137,32 @@ function renderBanner() {
 }
 const fmtDate = (s) => { if (!s) return ''; const p = s.split('-'); return p[2] + '/' + p[1]; };
 
+/* ---------- não fechados ---------- */
+function perdidos() {
+  const list = S.budgets.filter((b) => b.status === 'recusado');
+  const total = list.reduce((x, b) => x + b.cobrado, 0), por = {};
+  list.forEach((b) => { (b.motivos.length ? b.motivos : ['Motivo não informado']).forEach((m) => { por[m] = por[m] || { n: 0, v: 0 }; por[m].n++; por[m].v += b.cobrado; }); });
+  const decididos = S.budgets.filter((b) => b.status !== 'enviado').length;
+  return { list, total, por, taxa: decididos ? Math.round((decididos - list.length) / decididos * 100) : null, decididos };
+}
+function perdidosHTML(full) {
+  const P = perdidos();
+  if (!P.list.length) return '<div class="card muted">Nenhum orçamento recusado até agora.</div>';
+  const keys = Object.keys(P.por).sort((a, b) => P.por[b].v - P.por[a].v), max = P.por[keys[0]].v || 1;
+  return '<div class="card loss"><div class="row" style="justify-content:space-between;flex-wrap:nowrap;align-items:flex-end"><div><span class="lbl" style="margin:0">Não fechou</span><div class="num lossv">' + brl(P.total) + '</div></div><div style="text-align:right" class="muted small">' + P.list.length + ' orçamento' + (P.list.length > 1 ? 's' : '') + (P.taxa != null ? '<br>' + P.taxa + '% de fechamento' : '') + '</div></div>' +
+    (full ? '<div style="margin-top:14px">' + keys.map((k) => '<div style="margin-bottom:10px"><div class="row" style="justify-content:space-between;flex-wrap:nowrap"><span class="small">' + esc(k) + '</span><span class="muted small">' + P.por[k].n + 'x · ' + brl(P.por[k].v) + '</span></div><div class="bar loss-bar"><i style="width:' + (P.por[k].v / max * 100) + '%"></i></div></div>').join('') + '<p class="small muted" style="margin:6px 0 0">Um orçamento com mais de um motivo conta em cada um deles.</p></div>' : '') + '</div>';
+}
+function showRecusa(id) {
+  const b = S.budgets.filter((x) => x.id === id)[0]; if (!b) return;
+  S.rz = { id, motivos: b.motivos.slice(), obs: b.obsRecusa };
+  const el = $('#sheet'); el.hidden = false; el.dataset.id = id;
+  el.innerHTML = '<div class="sheet-wrap" data-a="fechar"><div class="sheet" data-stop><div class="bd" style="padding-top:22px">' +
+    '<h2 style="margin-top:0">Por que não fechou?</h2><p class="small muted" style="margin:0 0 12px">' + esc(b.cliente) + ' · ' + brl(b.cobrado) + '. Marque o motivo que você sabe ou suspeita. Pode marcar mais de um.</p>' +
+    '<div class="row">' + MOTIVOS.map((m) => '<button class="chip' + (S.rz.motivos.indexOf(m) > -1 ? ' on' : '') + '" data-a="rz-chip" data-g="' + esc(m) + '">' + esc(m) + '</button>').join('') + '</div>' +
+    '<label class="field" style="margin-top:14px"><span class="lbl">Observação (opcional)</span><input class="in" id="rz-obs" value="' + esc(b.obsRecusa) + '" placeholder="Ex.: achou caro, achou outro por R$ 120"></label>' +
+    '<div class="stack" style="margin-top:14px"><button class="btn block no" data-a="rz-ok">Marcar como não fechou</button><button class="btn ghost block" data-a="fechar">Cancelar</button></div></div></div></div>';
+}
+
 /* ---------- INÍCIO ---------- */
 function renderInicio() {
   const R = results();
@@ -155,6 +182,7 @@ function renderInicio() {
     '<h2>Próximo serviço</h2>' +
     (prox ? '<div class="card stack"><div class="row" style="justify-content:space-between;flex-wrap:nowrap"><div style="min-width:0"><b>' + esc(prox.cliente) + '</b><div class="muted small">' + esc(prox.bairro) + ' · ' + prox.os.itens.length + ' serviços · previsto ' + fh(totalMin(prox.itens)) + '</div></div><span class="pill app">' + fmtDate(prox.os.data) + '</span></div><button class="btn" data-a="openos" data-id="' + prox.id + '">Abrir ordem de serviço</button></div>'
       : '<div class="card muted">Nenhum serviço agendado. Aprove um orçamento para gerar a ordem de serviço.</div>') +
+    '<h2>Orçamentos não fechados</h2>' + perdidosHTML(true) +
     '<h2>Onde você perde tempo</h2>' +
     (rows ? '<div class="card">' + rows + '</div>' : '<div class="card muted">Conclua um serviço e marque os gargalos para ver o padrão aparecer aqui.</div>');
 }
@@ -262,10 +290,12 @@ function renderOrcamentos() {
   const pill = { enviado: ['send', 'Enviado'], aprovado: ['app', 'Aprovado'], concluido: ['done', 'Concluído'], recusado: ['no', 'Recusado'] };
   $('#v-orcamentos').innerHTML = '<h1>Orçamentos</h1><p class="sub">Marque como aprovado quando o cliente fechar. A ordem de serviço é criada na hora.</p>' +
     '<div class="row" style="margin-bottom:14px"><button class="btn" data-a="goto" data-v="orcar">+ Novo orçamento</button></div>' +
+    (S.budgets.some((b) => b.status === 'recusado') ? '<div style="margin-bottom:14px">' + perdidosHTML(false) + '<button class="linkbtn" data-a="goto" data-v="inicio">Ver motivos no Início ›</button></div>' : '') +
     (list.length ? '<div class="stack">' + list.map((b) => {
       const s = status(b), p = pill[s];
       const glow = (s === 'aprovado' || s === 'concluido') ? ' glow-ok' : (s === 'recusado' ? ' glow-no' : '');
       return '<div class="card stack' + glow + '"><div class="row" style="justify-content:space-between;flex-wrap:nowrap"><div style="min-width:0"><b>' + esc(b.cliente) + '</b><div class="muted small">Nº ' + String(b.n).padStart(4, '0') + ' · ' + esc(b.bairro || 'sem bairro') + ' · ' + fmtDate(b.data) + '</div></div><span class="pill ' + p[0] + '">' + p[1] + '</span></div>' +
+        (s === 'recusado' ? '<div class="row" style="gap:6px">' + (b.motivos.length ? b.motivos.map((m) => '<span class="pill no">' + esc(m) + '</span>').join('') : '<span class="muted small">Motivo não informado</span>') + '<button class="linkbtn" style="padding:4px 6px" data-a="recusar" data-id="' + b.id + '">' + (b.motivos.length ? 'Editar' : 'Informar motivo') + '</button></div>' + (b.obsRecusa ? '<div class="small muted">' + esc(b.obsRecusa) + '</div>' : '') : '') +
         '<div class="row" style="justify-content:space-between"><span class="muted small">' + b.itens.length + ' serviços · ' + fh(totalMin(b.itens)) + '</span><b class="num">' + brl(b.cobrado) + '</b></div>' +
         '<div class="row"><button class="btn ghost sm" data-a="ver" data-id="' + b.id + '">Ver e enviar</button>' +
         (s === 'enviado' ? '<button class="btn sm ok" data-a="aprovar" data-id="' + b.id + '">Aprovado</button><button class="btn sm no" data-a="recusar" data-id="' + b.id + '">Recusou</button>' : '') +
@@ -436,7 +466,15 @@ document.addEventListener('click', async (e) => {
       bb.os = await api.approve(bb, dayStr(1)); bb.status = 'aprovado'; S.osId = bb.id;
       toast('Orçamento aprovado. Ordem de serviço criada.'); go('servico'); return;
     }
-    if (a === 'recusar') { const bb = S.budgets.filter((x) => x.id === id)[0]; await api.setStatus(id, 'recusado'); bb.status = 'recusado'; renderOrcamentos(); return; }
+    if (a === 'recusar') { showRecusa(id); return; }
+    if (a === 'rz-chip') { const g = t.getAttribute('data-g'), ix = S.rz.motivos.indexOf(g); if (ix > -1) S.rz.motivos.splice(ix, 1); else S.rz.motivos.push(g); t.classList.toggle('on'); return; }
+    if (a === 'rz-ok') {
+      const bb = S.budgets.filter((x) => x.id === S.rz.id)[0]; if (!bb) return;
+      t.disabled = true;
+      try { await api.setRecusa(bb.id, S.rz.motivos, S.rz.obs); } catch (er) { t.disabled = false; throw er; }
+      bb.status = 'recusado'; bb.motivos = S.rz.motivos.slice(); bb.obsRecusa = S.rz.obs;
+      $('#sheet').hidden = true; $('#sheet').innerHTML = ''; toast('Registrado'); route(); return;
+    }
     if (a === 'openos') { S.osId = id; go('servico'); return; }
     if (await tabelaMod.click(a, t, ctx)) return;
     if (await promptsMod.click(a, t, ctx)) return;
@@ -476,6 +514,7 @@ document.addEventListener('click', async (e) => {
 document.addEventListener('input', (e) => {
   const t = e.target;
   if (tabelaMod.input(e, ctx) || caixaMod.input(e, ctx)) return;
+  if (t.id === 'rz-obs') { if (S.rz) S.rz.obs = t.value; return; }
   if (t.id === 'nome') { S.nome = t.value; saveAllProfile(); renderTop(); return; }
   if (t.hasAttribute('data-n')) { S[t.getAttribute('data-n')] = parseFloat(String(t.value).replace(',', '.')) || 0; saveAllProfile(); updValor(); return; }
   if (t.hasAttribute('data-d')) { S.draft[t.getAttribute('data-d')] = t.value; return; }

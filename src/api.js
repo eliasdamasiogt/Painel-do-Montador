@@ -49,6 +49,8 @@ function mapBudget(r) {
     fotoPath: r.foto_path || null,
     fotoData: null,
     status: r.status,
+    motivos: r.motivos_recusa || [],
+    obsRecusa: r.obs_recusa || '',
     data: localDay(r.created_at),
     itens: (r.orcamento_itens || []).slice().sort(byOrdem).map((i) => ({ nome: i.nome, tipo: i.tipo, min: i.minutos_previstos })),
     os: mapOS(o),
@@ -235,6 +237,10 @@ export async function createBudget(userId, d) {
   return b;
 }
 
+export async function setRecusa(id, motivos, obs) {
+  const { error } = await supabase.from('orcamentos').update({ status: 'recusado', motivos_recusa: motivos, obs_recusa: obs || '' }).eq('id', id);
+  fail(error);
+}
 export async function setStatus(id, status) {
   const { error } = await supabase.from('orcamentos').update({ status }).eq('id', id);
   fail(error);
