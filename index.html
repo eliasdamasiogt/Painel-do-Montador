@@ -24,9 +24,34 @@
     <form id="authForm" class="card stack" novalidate>
       <label class="field"><span class="lbl">E-mail</span><input class="in" id="authEmail" type="email" autocomplete="email" inputmode="email" required></label>
       <label class="field"><span class="lbl">Senha</span><input class="in" id="authPass" type="password" autocomplete="current-password" minlength="6" required></label>
+      <label class="chk" id="authTermsRow" hidden><input type="checkbox" id="authTerms"> <span>Li e aceito os <a href="/termos.html" target="_blank" rel="noopener">Termos de Uso</a> e a <a href="/privacidade.html" target="_blank" rel="noopener">Política de Privacidade</a>.</span></label>
       <p class="err" id="authErr" role="alert"></p>
       <button class="btn block" id="authGo" type="submit">Entrar</button>
       <button class="linkbtn" id="authSwitch" type="button">Ainda não tenho conta</button>
+      <button class="linkbtn" id="authForgot" type="button">Esqueci minha senha</button>
+    </form>
+    <p class="small muted" style="text-align:center;margin:14px 0 0"><a href="/termos.html" target="_blank" rel="noopener">Termos de Uso</a> · <a href="/privacidade.html" target="_blank" rel="noopener">Privacidade</a></p>
+  </section>
+
+  <section id="gate" class="auth" hidden>
+    <div class="slot"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></div>
+    <h1 id="gateTitle">Acesso pendente</h1>
+    <p class="sub" id="gateMsg"></p>
+    <div class="card stack">
+      <p class="small muted" style="margin:0">Conta: <b id="gateEmail" style="color:var(--fg);overflow-wrap:anywhere"></b></p>
+      <button class="btn block" id="gateCheck" type="button">Já comprei, verificar de novo</button>
+      <button class="linkbtn" id="gateOut" type="button">Sair</button>
+    </div>
+  </section>
+
+  <section id="recover" class="auth" hidden>
+    <h1>Nova senha</h1>
+    <p class="sub">Escolha uma senha nova para a sua conta.</p>
+    <form id="recoverForm" class="card stack" novalidate>
+      <label class="field"><span class="lbl">Nova senha</span><input class="in" id="recPass" type="password" autocomplete="new-password" minlength="6"></label>
+      <label class="field"><span class="lbl">Repita a nova senha</span><input class="in" id="recPass2" type="password" autocomplete="new-password" minlength="6"></label>
+      <p class="err" id="recErr" role="alert"></p>
+      <button class="btn block" id="recGo" type="submit">Salvar nova senha</button>
     </form>
   </section>
 

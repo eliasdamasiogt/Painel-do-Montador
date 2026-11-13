@@ -114,6 +114,7 @@ export async function loadAll(userId) {
     profile: {
       nome: p.nome_negocio || '',
       tema: p.tema || 'artifex',
+      acesso: p.acesso || 'pendente',
       logoPath: p.logo_path,
       meta: Number(p.meta_mensal),
       custos: Number(p.custos_mensais),
@@ -294,9 +295,26 @@ export async function entrar(email, senha) {
   return data.session;
 }
 export async function criarConta(email, senha) {
-  const { data, error } = await supabase.auth.signUp({ email, password: senha });
+  const { data, error } = await supabase.auth.signUp({
+    email, password: senha,
+    options: { emailRedirectTo: window.location.origin, data: { aceite_termos_em: new Date().toISOString(), aceite_versao: '2026-11-12' } },
+  });
   fail(error);
   return data;
+}
+export async function esqueciSenha(email) {
+  const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin });
+  fail(error);
+}
+export async function novaSenha(senha) {
+  const { error } = await supabase.auth.updateUser({ password: senha });
+  fail(error);
+}
+export async function excluirConta() {
+  const { data, error } = await supabase.functions.invoke('excluir-conta', { method: 'POST' });
+  fail(error);
+  if (!data || !data.ok) throw new Error('falha ao excluir');
+  try { await supabase.auth.signOut(); } catch (e) { /* conta já removida */ }
 }
 export async function sair() {
   await supabase.auth.signOut();

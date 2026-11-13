@@ -24,6 +24,7 @@ export function picker() {
 export function fillResults(ctx) {
   const el = ctx.$('#refres'); if (!el) return;
   const S = ctx.S, q = norm(ctx.$('#refq') ? ctx.$('#refq').value : '').trim();
+  if (!S.tabela.length) { el.innerHTML = '<p class="muted small" style="margin:6px 2px">Sua tabela de referência está vazia. Cadastre seus preços em Mais › Tabela de referência (opcional) ou toque em "Outro móvel".</p>'; return; }
   const toks = q.split(/\s+/).filter(Boolean);
   let list = S.tabela.filter((r) => toks.every((t) => norm(r.nome).indexOf(t) > -1));
   if (!toks.length) list = list.slice(0, 6);
@@ -51,6 +52,7 @@ export function render(ctx) {
     '<label class="field"><span class="lbl">Buscar</span><input class="in" id="tq" value="' + esc(S.refQ || '') + '" placeholder="Ex.: painel"></label>' +
     '<div class="row" style="margin-top:10px"><button class="btn sm" data-a="ref-new">+ Adicionar item</button></div>' +
     (S.refEdit === 'new' ? '<h2>Novo item</h2><div class="card">' + editor(ctx, { id: 'new', grupo: 'novo', nome: '', min: '', max: '', un: '', mins: 60 }) + '</div>' : '') +
+    (S.tabela.length ? '' : '<div class="card muted" style="margin-top:12px">Sua tabela está vazia. Toque em "+ Adicionar item" e cadastre os preços médios que você costuma praticar ou pesquisar na sua região. Eles servem só de comparação na hora de orçar.</div>') +
     grupo('novo', 'Móveis novos na caixa') + grupo('usado', 'Móveis usados') +
     '<div class="note" style="margin-top:16px">Os tempos sugeridos são estimativas iniciais. Depois de cronometrar serviços, o app passa a sugerir a sua média real.</div>';
 }

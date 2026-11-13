@@ -1,4 +1,5 @@
 import './style.css';
+const RECOVERY = /type=recovery/.test(window.location.hash);
 import { supabase } from './supabase.js';
 import * as api from './api.js';
 import { gerarPDF, compartilharPDF } from './pdf.js';
@@ -215,7 +216,11 @@ function renderMais() {
     '<p class="small muted" style="margin:8px 2px 0">A logo e o nome aparecem no cabeçalho e no PDF do orçamento.</p>' +
     '<h2>Aparência</h2><div class="tema-grid">' + TEMAS.map((t) => '<button class="tema' + (S.tema === t[0] ? ' on' : '') + '" data-a="tema" data-t="' + t[0] + '" aria-label="Tema ' + t[1] + '"><span class="sw">' + t[2].map((c) => '<i style="background:' + c + '"></i>').join('') + '</span><b>' + t[1] + '</b>' + (S.tema === t[0] ? '<span class="ck">✓</span>' : '') + '</button>').join('') + '</div>' +
     '<p class="small muted" style="margin:8px 2px 0">O tema vale para o app. O PDF do orçamento mantém o visual escuro premium.</p>' +
-    '<h2>Conta</h2><div class="card row" style="justify-content:space-between"><span class="muted small" style="overflow-wrap:anywhere;min-width:0">' + esc(S.email) + '</span><button class="btn ghost sm" data-a="sair">Sair</button></div>';
+    '<h2>Conta</h2><div class="card row" style="justify-content:space-between"><span class="muted small" style="overflow-wrap:anywhere;min-width:0">' + esc(S.email) + '</span><button class="btn ghost sm" data-a="sair">Sair</button></div>' +
+    '<h2>Privacidade</h2><div class="card stack"><div class="row"><a class="linkbtn" href="/termos.html" target="_blank" rel="noopener">Termos de Uso</a><a class="linkbtn" href="/privacidade.html" target="_blank" rel="noopener">Política de Privacidade</a></div>' +
+    '<p class="small muted" style="margin:0">Excluir a conta apaga para sempre seus orçamentos, serviços, caixa, agenda, fotos e PDFs. Não dá para desfazer.</p>' +
+    '<label class="field"><span class="lbl">Digite EXCLUIR para confirmar</span><input class="in" id="delconf" autocomplete="off"></label>' +
+    '<button class="btn ghost sm del" data-a="delconta">Excluir minha conta</button></div>';
 }
 
 /* ---------- VALOR/H ---------- */
@@ -411,6 +416,12 @@ document.addEventListener('click', async (e) => {
     if (a === 'foto') { $('#fotoFile').click(); return; }
     if (a === 'sair') { await api.sair(); return; }
     if (a === 'tema') { S.tema = aplicaTema(t.getAttribute('data-t')); bg(api.saveProfile(S.uid, { tema: S.tema })); renderMais(); return; }
+    if (a === 'delconta') {
+      if (($('#delconf').value || '').trim().toUpperCase() !== 'EXCLUIR') { toast('Digite EXCLUIR para confirmar'); return; }
+      t.disabled = true;
+      try { await api.excluirConta(); } catch (er) { t.disabled = false; throw er; }
+      S = blank(); toast('Conta excluída'); show('auth'); return;
+    }
     if (a === 'goto') { go(t.getAttribute('data-v')); return; }
     if (a === 'addrow') { S.draft.itens.push({ nome: '', tipo: 'Montagem', min: 60 }); drawRows(); updOrc(); return; }
     if (a === 'delrow') { S.draft.itens.splice(i, 1); drawRows(); updOrc(); return; }
@@ -575,14 +586,27 @@ setInterval(() => {
 function show(which) {
   $('#boot').hidden = which !== 'boot';
   $('#auth').hidden = which !== 'auth';
+  $('#gate').hidden = which !== 'gate';
+  $('#recover').hidden = which !== 'recover';
   $('#app').hidden = which !== 'app';
   $('#tabsWrap').hidden = which !== 'app';
+}
+let gateUser = null, recuperando = RECOVERY;
+function mostraGate(user, acesso) {
+  gateUser = user;
+  $('#gateEmail').textContent = user.email || '';
+  $('#gateTitle').textContent = acesso === 'bloqueado' ? 'Acesso suspenso' : 'Acesso pendente';
+  $('#gateMsg').textContent = acesso === 'bloqueado'
+    ? 'O acesso desta conta está suspenso (cancelamento, reembolso ou pagamento não confirmado). Se acha que é um engano, fale com o suporte.'
+    : 'Sua conta foi criada, mas ainda não encontramos uma compra com este e-mail. Entre com o mesmo e-mail usado na compra. Se você acabou de comprar, aguarde alguns minutos e toque em verificar.';
+  show('gate');
 }
 let modoCadastro = false;
 function setModo(c) {
   modoCadastro = c;
   $('#authGo').textContent = c ? 'Criar conta' : 'Entrar';
   $('#authSwitch').textContent = c ? 'Já tenho conta' : 'Ainda não tenho conta';
+  $('#authTermsRow').hidden = !c; $('#authForgot').hidden = c;
   $('#authPass').autocomplete = c ? 'new-password' : 'current-password';
   $('#authErr').textContent = '';
 }
@@ -597,10 +621,33 @@ function msgErro(err) {
   return 'Não foi possível entrar. Verifique a internet e tente de novo.';
 }
 $('#authSwitch').addEventListener('click', () => setModo(!modoCadastro));
+$('#authForgot').addEventListener('click', async () => {
+  const email = $('#authEmail').value.trim();
+  if (!email) { $('#authErr').textContent = 'Digite seu e-mail acima e toque em "Esqueci minha senha".'; return; }
+  try { await api.esqueciSenha(email); $('#authErr').textContent = ''; toast('Se este e-mail tiver conta, enviamos o link para criar uma nova senha.'); }
+  catch (err) { $('#authErr').textContent = msgErro(err); }
+});
+$('#recoverForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const a = $('#recPass').value, b = $('#recPass2').value;
+  if (a.length < 6) { $('#recErr').textContent = 'A senha precisa ter pelo menos 6 caracteres.'; return; }
+  if (a !== b) { $('#recErr').textContent = 'As duas senhas não são iguais.'; return; }
+  $('#recGo').disabled = true; $('#recErr').textContent = '';
+  try {
+    await api.novaSenha(a); recuperando = false; $('#recPass').value = ''; $('#recPass2').value = '';
+    history.replaceState(null, '', window.location.pathname);
+    const { data } = await supabase.auth.getSession();
+    toast('Senha alterada'); if (data.session) await start(data.session.user); else show('auth');
+  } catch (err) { $('#recErr').textContent = msgErro(err); }
+  $('#recGo').disabled = false;
+});
+$('#gateCheck').addEventListener('click', async () => { if (gateUser) await start(gateUser); });
+$('#gateOut').addEventListener('click', () => api.sair());
 $('#authForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const email = $('#authEmail').value.trim(), senha = $('#authPass').value;
   if (!email || senha.length < 6) { $('#authErr').textContent = 'Informe e-mail e uma senha de pelo menos 6 caracteres.'; return; }
+  if (modoCadastro && !$('#authTerms').checked) { $('#authErr').textContent = 'Para criar a conta, aceite os Termos de Uso e a Política de Privacidade.'; return; }
   const btn = $('#authGo'); btn.disabled = true; $('#authErr').textContent = '';
   try {
     if (modoCadastro) {
@@ -618,6 +665,7 @@ async function start(user) {
   show('boot');
   try {
     const r = await api.loadAll(user.id);
+    if (r.profile.acesso !== 'ativo') { S = blank(); mostraGate(user, r.profile.acesso); return; }
     S = blank();
     S.uid = user.id; S.email = user.email || '';
     S.nome = r.profile.nome; S.tema = aplicaTema(r.profile.tema); S.meta = r.profile.meta; S.custos = r.profile.custos; S.dias = r.profile.dias; S.hdia = r.profile.hdia;
@@ -631,9 +679,11 @@ async function start(user) {
 }
 
 supabase.auth.onAuthStateChange((ev) => {
-  if (ev === 'SIGNED_OUT') { S = blank(); $('#authPass').value = ''; show('auth'); }
+  if (ev === 'PASSWORD_RECOVERY') { recuperando = true; show('recover'); return; }
+  if (ev === 'SIGNED_OUT') { S = blank(); gateUser = null; $('#authPass').value = ''; show('auth'); }
 });
 (async () => {
   const { data } = await supabase.auth.getSession();
-  if (data.session) await start(data.session.user); else show('auth');
+  if (recuperando && data.session) show('recover');
+  else if (data.session) await start(data.session.user); else show('auth');
 })();
