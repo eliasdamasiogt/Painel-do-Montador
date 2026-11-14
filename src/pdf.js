@@ -73,7 +73,7 @@ export async function gerarPDF({ b, nome, logo, foto }) {
   const fim = foto ? await loadImg(foto) : null;
   const ps = fim ? fit(fim, 70, 70) : null;
   const valW = (ps ? W - M - ps.w - 6 : W - M) - (M + 28);
-  const rows = [['Cliente', b.cliente], ['Contato', b.tel || '-'], ['Endereço', b.bairro || '-'], ['Emissão', fdate(b.data)], ['Validade', vd]];
+  const rows = [['Cliente', b.cliente], ['Contato', b.tel || '-'], ['Bairro', b.bairro || '-'], ['Emissão', fdate(b.data)], ['Validade', vd]];
   let y = 67;
   doc.setFontSize(10.5);
   rows.forEach(([k, v]) => {

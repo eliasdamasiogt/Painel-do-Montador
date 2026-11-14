@@ -274,8 +274,7 @@ function renderOrcar() {
     '<h1 style="margin-top:6px">Novo orçamento</h1><p class="sub">Cliente, serviços e tempo de cada um. O preço sai do seu valor-hora.</p>' +
     '<div class="card stack"><label class="field"><span class="lbl">Nome do cliente</span><input class="in" data-d="cliente" value="' + esc(d.cliente) + '" placeholder="Ex.: Marina Souza"></label>' +
     '<label class="field"><span class="lbl">WhatsApp (com DDD)</span><input class="in" inputmode="tel" data-d="tel" value="' + esc(d.tel) + '" placeholder="(31) 9 0000-0000"></label>' +
-    '<label class="field"><span class="lbl">Endereço do cliente</span><textarea class="in" rows="2" data-d="bairro" placeholder="Cole aqui o endereço completo">' + esc(d.bairro) + '</textarea></label>' +
-    '<button class="btn ghost sm" type="button" data-a="maps">Abrir no Google Maps</button></div>' +
+    '<label class="field"><span class="lbl">Bairro</span><input class="in" data-d="bairro" value="' + esc(d.bairro) + '" placeholder="Bairro"></label></div>' +
     '<h2>Serviços</h2>' +
     '<div class="stack" style="gap:8px;margin-bottom:10px">' + tabelaMod.picker() + '</div>' +
     '<div class="card" id="rows" style="padding-top:4px;padding-bottom:4px"></div>' +
@@ -334,14 +333,14 @@ function renderOrcamentos() {
     (list.length ? '<div class="stack">' + list.map((b) => {
       const s = status(b), p = pill[s];
       const glow = (s === 'aprovado' || s === 'concluido') ? ' glow-ok' : (s === 'recusado' ? ' glow-no' : '');
-      return '<div class="card stack' + glow + '"><div class="row" style="justify-content:space-between;flex-wrap:nowrap"><div style="min-width:0"><b>' + esc(b.cliente) + '</b><div class="muted small">Nº ' + String(b.n).padStart(4, '0') + ' · ' + esc(curto(b.bairro) || 'sem endereço') + ' · ' + fmtDate(b.data) + '</div></div><span class="pill ' + p[0] + '">' + p[1] + '</span></div>' +
+      return '<div class="card stack' + glow + '"><div class="row" style="justify-content:space-between;flex-wrap:nowrap"><div style="min-width:0"><b>' + esc(b.cliente) + '</b><div class="muted small">Nº ' + String(b.n).padStart(4, '0') + ' · ' + esc(curto(b.bairro) || 'sem bairro') + ' · ' + fmtDate(b.data) + '</div></div><span class="pill ' + p[0] + '">' + p[1] + '</span></div>' +
         (s === 'recusado' ? '<div class="row" style="gap:6px">' + (b.motivos.length ? b.motivos.map((m) => '<span class="pill no">' + esc(m) + '</span>').join('') : '<span class="muted small">Motivo não informado</span>') + '<button class="linkbtn" style="padding:4px 6px" data-a="recusar" data-id="' + b.id + '">' + (b.motivos.length ? 'Editar' : 'Informar motivo') + '</button></div>' + (b.obsRecusa ? '<div class="small muted">' + esc(b.obsRecusa) + '</div>' : '') : '') +
         '<div class="row" style="justify-content:space-between"><span class="muted small">' + b.itens.length + ' serviços · ' + fh(totalMin(b.itens)) + '</span><b class="num">' + brl(b.cobrado) + '</b></div>' +
         '<div class="row"><button class="btn ghost sm" data-a="ver" data-id="' + b.id + '">Ver e enviar</button>' +
         (s === 'enviado' ? '<button class="btn sm ok" data-a="aprovar" data-id="' + b.id + '">Aprovado</button><button class="btn sm no" data-a="recusar" data-id="' + b.id + '">Recusou</button>' : '') +
         (s === 'aprovado' ? '<button class="btn sm" data-a="openos" data-id="' + b.id + '">Abrir OS</button>' : '') +
         (s === 'concluido' ? '<button class="btn sm" data-a="openos" data-id="' + b.id + '">Ver resultado</button>' : '') +
-        (b.bairro ? '<button class="btn ghost sm" data-a="maps" data-id="' + b.id + '">Mapa</button>' : '') + '<button class="btn ghost sm del" data-a="delorc" data-id="' + b.id + '">Excluir</button></div></div>';
+        '<button class="btn ghost sm del" data-a="delorc" data-id="' + b.id + '">Excluir</button></div></div>';
     }).join('') + '</div>' : '<div class="card muted">Nenhum orçamento ainda. Toque em "Novo orçamento".</div>');
 }
 
@@ -358,13 +357,13 @@ function showSheet(id) {
     '<div class="hd"><span class="slot">' + (S.logo ? '<img src="' + S.logo + '" alt="Logo">' : UPLOAD) + '</span><div><b>' + esc(S.nome || 'Seu nome ou empresa') + '</b><span class="muted small">Montagem e instalação de móveis</span></div></div>' +
     '<div class="bd">' + (b.fotoData ? '<div class="photo" style="background-image:url(' + b.fotoData + ')"></div>' : '') +
     '<span class="lbl">Orçamento Nº ' + String(b.n).padStart(4, '0') + '</span>' +
-    '<dl class="kv"><dt>Cliente</dt><dd>' + esc(b.cliente) + '</dd><dt>Endereço</dt><dd>' + esc(b.bairro || '—') + '</dd><dt>Emissão</dt><dd>' + fmtDate(b.data) + '</dd><dt>Validade</dt><dd>' + String(val.getDate()).padStart(2, '0') + '/' + String(val.getMonth() + 1).padStart(2, '0') + '</dd></dl>' +
+    '<dl class="kv"><dt>Cliente</dt><dd>' + esc(b.cliente) + '</dd><dt>Bairro</dt><dd>' + esc(b.bairro || '—') + '</dd><dt>Emissão</dt><dd>' + fmtDate(b.data) + '</dd><dt>Validade</dt><dd>' + String(val.getDate()).padStart(2, '0') + '/' + String(val.getMonth() + 1).padStart(2, '0') + '</dd></dl>' +
     '<h2>Serviços</h2><div class="tw"><table><tr><th>Móvel</th><th>Serviço</th><th class="r">Tempo</th></tr>' + b.itens.map((i) => '<tr><td>' + esc(i.nome) + '</td><td>' + esc(i.tipo) + '</td><td class="r">' + fh(i.min) + '</td></tr>').join('') + '</table></div>' +
     '<div class="tot"><span class="lbl" style="margin:0">Total</span><span class="num">' + brl(b.cobrado) + '</span></div>' +
     '<p class="small muted" style="margin:6px 0 0">Não incluso: frete, serviços extras durante o atendimento e avarias nas peças que impeçam a montagem.</p>' +
     '<label class="field" style="margin-top:16px"><span class="lbl">WhatsApp do cliente (com DDD)</span><input class="in" id="sheet-tel" inputmode="tel" value="' + esc(b.tel) + '" placeholder="(31) 9 0000-0000"></label>' +
-    '<div class="stack" style="margin-top:12px"><button class="btn block" data-a="zapfile" data-id="' + b.id + '">Enviar PDF + texto no WhatsApp</button><button class="btn ghost block" data-a="copiamsg" data-id="' + b.id + '">Copiar só a mensagem</button><button class="btn ghost block" data-a="zap" data-id="' + b.id + '">Abrir conversa do cliente (texto + link)</button>' + (b.bairro ? '<button class="btn ghost block" data-a="maps" data-id="' + b.id + '">Abrir endereço no Maps</button>' : '') + '<button class="btn ghost block" data-a="fechar">Fechar</button></div>' +
-    '<p class="small muted" style="margin:10px 0 0"><b>PDF + texto:</b> o celular abre a lista de apps; escolha o WhatsApp e depois o contato. O PDF e a mensagem vão juntos. <b>Abrir conversa:</b> vai direto no número do cliente, mas o PDF segue como link dentro do texto, porque o WhatsApp não deixa anexar arquivo por esse caminho.</p></div></div></div>';
+    '<div class="stack" style="margin-top:12px"><button class="btn block" data-a="zap" data-id="' + b.id + '">Enviar no WhatsApp do cliente</button><button class="btn ghost block" data-a="zapfile" data-id="' + b.id + '">Anexar o PDF (escolher o contato)</button><button class="btn ghost block" data-a="copiamsg" data-id="' + b.id + '">Copiar só a mensagem</button><button class="btn ghost block" data-a="fechar">Fechar</button></div>' +
+    '<p class="small muted" style="margin:10px 0 0"><b>Enviar no WhatsApp do cliente:</b> abre direto a conversa com o número informado, com a mensagem pronta e o link do PDF no fim. <b>Anexar o PDF:</b> manda o arquivo de verdade, mas o celular pede para você escolher o contato (o WhatsApp não permite as duas coisas juntas).</p></div></div></div>';
   prepararPDF(b).catch(() => {});
   if (b.fotoPath && !b.fotoData) ensureFoto(b).then(() => { if (!$('#sheet').hidden && $('#sheet').dataset.id === id && b.fotoData) showSheet(id); });
 }
@@ -375,7 +374,7 @@ function renderServico() {
   const b = curB(), el = $('#v-servico');
   if (!b) { el.innerHTML = '<h1>Serviço do dia</h1><div class="card muted">Nenhuma ordem de serviço aberta. Aprove um orçamento na aba Orçamentos.</div>'; return; }
   const os = b.os, fim = !!os.fim, allDone = os.itens.every((i) => i.done);
-  el.innerHTML = '<button class="linkbtn" style="text-decoration:none;padding:0" data-a="goto" data-v="orcamentos">‹ Orçamentos</button><h1 style="margin-top:6px">' + esc(b.cliente) + '</h1><p class="sub">' + esc(curto(b.bairro)) + ' · OS do orçamento Nº ' + String(b.n).padStart(4, '0') + ' · ' + brl(b.cobrado) + '</p>' + (b.bairro ? '<div class="card" style="margin-bottom:12px"><div class="small muted" style="margin-bottom:8px;overflow-wrap:anywhere">' + esc(b.bairro) + '</div><button class="btn ghost sm" data-a="maps" data-id="' + b.id + '">Abrir no Google Maps</button></div>' : '') +
+  el.innerHTML = '<button class="linkbtn" style="text-decoration:none;padding:0" data-a="goto" data-v="orcamentos">‹ Orçamentos</button><h1 style="margin-top:6px">' + esc(b.cliente) + '</h1><p class="sub">' + esc(curto(b.bairro)) + ' · OS do orçamento Nº ' + String(b.n).padStart(4, '0') + ' · ' + brl(b.cobrado) + '</p>' + '<div class="card stack" style="margin-bottom:12px"><label class="field"><span class="lbl">Endereço completo do cliente</span><textarea class="in" rows="2" data-end="' + b.id + '" placeholder="Cole aqui o endereço para ir ao local">' + esc(b.endereco) + '</textarea></label><button class="btn ghost sm" type="button" data-a="maps" data-id="' + b.id + '">Abrir no Google Maps</button></div>' +
     '<div class="card stack"><div class="grid2"><label class="field"><span class="lbl">Data do serviço</span><input class="in" type="date" id="os-data" value="' + esc(os.data || '') + '"></label>' +
     '<div><span class="lbl">Chegada</span>' + (os.checkin ? '<div class="num" style="padding:10px 0">' + new Date(os.checkin).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) + '</div>' : '<button class="btn sm block" data-a="checkin"' + (fim ? ' disabled' : '') + '>Check-in</button>') + '</div></div></div>' +
     '<h2>Ferramentas</h2><div class="card"><div class="grid2">' + TOOLS.map((t) => '<label class="chk"><input type="checkbox" data-tool="' + esc(t) + '"' + (os.tools[t] !== false ? ' checked' : '') + '> <span>' + esc(t) + '</span></label>').join('') + '</div>' +
@@ -474,9 +473,9 @@ document.addEventListener('click', async (e) => {
     }
     if (a === 'ver') { showSheet(id); return; }
     if (a === 'maps') {
-      const bb = id ? S.budgets.filter((x) => x.id === id)[0] : null;
-      const addr = bb ? bb.bairro : S.draft.bairro;
-      if (!addr || !addr.trim()) { toast('Cole o endereço primeiro'); return; }
+      const bb = S.budgets.filter((x) => x.id === id)[0];
+      const ta = $('[data-end]'), addr = ((ta && ta.value) || (bb && bb.endereco) || '').trim();
+      if (!addr) { toast('Cole o endereço completo primeiro'); return; }
       window.open(mapsUrl(addr), '_blank', 'noopener'); return;
     }
     if (a === 'copiamsg') {
@@ -589,6 +588,11 @@ document.addEventListener('change', async (e) => {
   const t = e.target, b = curB();
   if (caixaMod.change(e, ctx)) return;
   if (await agendaMod.change(e, ctx)) return;
+  if (t.hasAttribute('data-end')) {
+    const bb = S.budgets.filter((x) => x.id === t.getAttribute('data-end'))[0]; if (!bb) return;
+    bb.endereco = t.value.trim(); try { await api.setEndereco(bb.id, bb.endereco); toast('Endereço salvo'); } catch (er) { toast('Não consegui salvar o endereço'); }
+    return;
+  }
   if (t.id === 'os-data' && b) { b.os.data = t.value; bg(api.updateOS(b.os.id, { data: t.value })); return; }
   if (t.hasAttribute('data-tool') && b) { b.os.tools[t.getAttribute('data-tool')] = t.checked; bg(api.updateOS(b.os.id, { tools: b.os.tools })); return; }
   if (t.tagName === 'SELECT' && t.hasAttribute('data-f')) { const r = +t.closest('[data-r]').getAttribute('data-r'); S.draft.itens[r].tipo = t.value; }

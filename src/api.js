@@ -45,6 +45,7 @@ function mapBudget(r) {
     cliente: r.cliente,
     tel: r.telefone || '',
     bairro: r.bairro || '',
+    endereco: r.endereco || '',
     cobrado: Number(r.valor_cobrado),
     fotoPath: r.foto_path || null,
     fotoData: null,
@@ -196,6 +197,10 @@ export async function deleteBudget(id, paths) {
   let r = await supabase.from('lancamentos').delete().eq('orcamento_id', id).eq('pago', false); fail(r.error);
   r = await supabase.from('orcamentos').delete().eq('id', id); fail(r.error);
   if (paths && paths.length) { try { await supabase.storage.from(BUCKET).remove(paths); } catch (e) { /* arquivo órfão não é problema */ } }
+}
+export async function setEndereco(id, endereco) {
+  const { error } = await supabase.from('orcamentos').update({ endereco }).eq('id', id);
+  fail(error);
 }
 export async function setTel(id, tel) {
   const { error } = await supabase.from('orcamentos').update({ telefone: tel }).eq('id', id);
