@@ -40,16 +40,13 @@ function dayStr(add) { const d = new Date(); d.setDate(d.getDate() + add); retur
 const curto = (a) => { const t = String(a || '').replace(/\s+/g, ' ').trim(); return t.length > 38 ? t.slice(0, 36) + '…' : t; };
 const mapsUrl = (a) => 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(String(a).replace(/\s+/g, ' ').trim());
 function mensagemZap(b, link) {
-  const val = new Date(b.data + 'T12:00:00'); val.setDate(val.getDate() + 7);
-  const dd = String(val.getDate()).padStart(2, '0') + '/' + String(val.getMonth() + 1).padStart(2, '0');
   const primeiro = b.cliente.trim().split(/\s+/)[0];
-  return ['📋 *ORÇAMENTO Nº ' + String(b.n).padStart(4, '0') + '*']
-    .concat(S.nome ? ['🛠️ ' + S.nome] : [])
-    .concat(['', 'Olá, ' + primeiro + '! 👋', 'Segue o seu orçamento de montagem:', '', '🪑 *Serviços*'])
-    .concat(b.itens.map((i) => '• ' + i.nome + ' _(' + i.tipo.toLowerCase() + ')_'))
-    .concat(['', '⏱️ *Tempo previsto:* ' + fh(totalMin(b.itens)), '💰 *Valor total:* ' + brl(b.cobrado), '📅 *Validade:* até ' + dd, ''])
-    .concat(link ? ['📄 *Orçamento completo (PDF):*', link] : ['📄 O orçamento completo em PDF segue anexo.'])
-    .concat(['', '✅ Para aprovar, é só me responder por aqui.', 'Qualquer dúvida, estou à disposição! 🤝'])
+  const mv = (i) => i.nome + ' (' + i.tipo.toLowerCase() + ')';
+  const moveis = b.itens.length === 1 ? ['🧰*Móvel:* ' + mv(b.itens[0])] : ['🧰*Móveis:*'].concat(b.itens.map((i) => '• ' + mv(i)));
+  return ['*Olá, ' + primeiro + '! Segue o orçamento Nº ' + String(b.n).padStart(4, '0') + (S.nome ? ' - ' + S.nome : '') + ' 😉👇*', '']
+    .concat(moveis)
+    .concat(['', '💰*Valor Total:* ' + brl(b.cobrado), '', '*⏱️Previsão de Execução:* ' + fh(totalMin(b.itens)), '', '*Validade deste Orçamento: 7 dias*', '', '_Orçamento completo em PDF:_'])
+    .concat(link ? [link] : [])
     .join('\n');
 }
 const nomeArquivo = (b) => 'Orcamento-' + String(b.n).padStart(4, '0') + '-' + b.cliente.replace(/[^\w]+/g, '-').replace(/^-|-$/g, '') + '.pdf';
@@ -366,7 +363,7 @@ function showSheet(id) {
     '<div class="tot"><span class="lbl" style="margin:0">Total</span><span class="num">' + brl(b.cobrado) + '</span></div>' +
     '<p class="small muted" style="margin:6px 0 0">Não incluso: frete, serviços extras durante o atendimento e avarias nas peças que impeçam a montagem.</p>' +
     '<label class="field" style="margin-top:16px"><span class="lbl">WhatsApp do cliente (com DDD)</span><input class="in" id="sheet-tel" inputmode="tel" value="' + esc(b.tel) + '" placeholder="(31) 9 0000-0000"></label>' +
-    '<div class="stack" style="margin-top:12px"><button class="btn block" data-a="zapfile" data-id="' + b.id + '">Enviar PDF + texto no WhatsApp</button><button class="btn ghost block" data-a="zap" data-id="' + b.id + '">Abrir conversa do cliente (texto + link)</button>' + (b.bairro ? '<button class="btn ghost block" data-a="maps" data-id="' + b.id + '">Abrir endereço no Maps</button>' : '') + '<button class="btn ghost block" data-a="fechar">Fechar</button></div>' +
+    '<div class="stack" style="margin-top:12px"><button class="btn block" data-a="zapfile" data-id="' + b.id + '">Enviar PDF + texto no WhatsApp</button><button class="btn ghost block" data-a="copiamsg" data-id="' + b.id + '">Copiar só a mensagem</button><button class="btn ghost block" data-a="zap" data-id="' + b.id + '">Abrir conversa do cliente (texto + link)</button>' + (b.bairro ? '<button class="btn ghost block" data-a="maps" data-id="' + b.id + '">Abrir endereço no Maps</button>' : '') + '<button class="btn ghost block" data-a="fechar">Fechar</button></div>' +
     '<p class="small muted" style="margin:10px 0 0"><b>PDF + texto:</b> o celular abre a lista de apps; escolha o WhatsApp e depois o contato. O PDF e a mensagem vão juntos. <b>Abrir conversa:</b> vai direto no número do cliente, mas o PDF segue como link dentro do texto, porque o WhatsApp não deixa anexar arquivo por esse caminho.</p></div></div></div>';
   prepararPDF(b).catch(() => {});
   if (b.fotoPath && !b.fotoData) ensureFoto(b).then(() => { if (!$('#sheet').hidden && $('#sheet').dataset.id === id && b.fotoData) showSheet(id); });
@@ -482,6 +479,11 @@ document.addEventListener('click', async (e) => {
       if (!addr || !addr.trim()) { toast('Cole o endereço primeiro'); return; }
       window.open(mapsUrl(addr), '_blank', 'noopener'); return;
     }
+    if (a === 'copiamsg') {
+      const b = S.budgets.filter((x) => x.id === id)[0]; if (!b) return;
+      try { await navigator.clipboard.writeText(mensagemZap(b, '')); toast('Mensagem copiada'); } catch (e) { toast('Não consegui copiar neste aparelho'); }
+      return;
+    }
     if (a === 'zapfile') {
       const b = S.budgets.filter((x) => x.id === id)[0]; if (!b) return;
       const tel = ($('#sheet-tel').value || '').trim();
@@ -494,7 +496,7 @@ document.addEventListener('click', async (e) => {
       t.disabled = false; t.textContent = txt;
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         try { navigator.clipboard.writeText(msg).catch(() => {}); } catch (e) { /* sem área de transferência */ }
-        try { await navigator.share({ files: [file], text: msg, title: 'Orçamento ' + b.cliente }); toast('Se a mensagem não vier junto, é só colar: já copiei o texto'); }
+        try { await navigator.share({ files: [file], text: msg, title: 'Orçamento ' + b.cliente }); toast('Se o texto não vier junto, cole a mensagem na conversa: já copiei'); }
         catch (e) { if (e && e.name !== 'AbortError') toast('Não consegui abrir o compartilhamento. Toque de novo.'); }
         return;
       }
