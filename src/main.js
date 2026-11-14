@@ -2,7 +2,7 @@ import './style.css';
 const RECOVERY = /type=recovery/.test(window.location.hash);
 import { supabase } from './supabase.js';
 import * as api from './api.js';
-import { gerarPDF, compartilharPDF } from './pdf.js';
+import { gerarPDF } from './pdf.js';
 import * as tabelaMod from './tabela.js';
 import * as caixaMod from './caixa.js';
 import * as agendaMod from './agenda.js';
@@ -37,6 +37,26 @@ const TOOLS = ['Parafusadeira', 'Furadeira', 'Jogo de chaves', 'Martelo de borra
 const GARGALOS = ['Desembalar', 'Organizar peças', 'Erro de montagem', 'Peça faltando ou com defeito', 'Retrabalho', 'Celular', 'Deslocamento', 'Falta de ferramenta'];
 
 function dayStr(add) { const d = new Date(); d.setDate(d.getDate() + add); return api.localDay(d.toISOString()); }
+const curto = (a) => { const t = String(a || '').replace(/\s+/g, ' ').trim(); return t.length > 38 ? t.slice(0, 36) + '…' : t; };
+const mapsUrl = (a) => 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(String(a).replace(/\s+/g, ' ').trim());
+function mensagemZap(b, link) {
+  const val = new Date(b.data + 'T12:00:00'); val.setDate(val.getDate() + 7);
+  const dd = String(val.getDate()).padStart(2, '0') + '/' + String(val.getMonth() + 1).padStart(2, '0');
+  const primeiro = b.cliente.trim().split(/\s+/)[0];
+  return ['📋 *ORÇAMENTO Nº ' + String(b.n).padStart(4, '0') + '*']
+    .concat(S.nome ? ['🛠️ ' + S.nome] : [])
+    .concat(['', 'Olá, ' + primeiro + '! 👋', 'Segue o seu orçamento de montagem:', '', '🪑 *Serviços*'])
+    .concat(b.itens.map((i) => '• ' + i.nome + ' _(' + i.tipo.toLowerCase() + ')_'))
+    .concat(['', '⏱️ *Tempo previsto:* ' + fh(totalMin(b.itens)), '💰 *Valor total:* ' + brl(b.cobrado), '📅 *Validade:* até ' + dd, ''])
+    .concat(link ? ['📄 *Orçamento completo (PDF):*', link] : ['📄 O orçamento completo em PDF segue anexo.'])
+    .concat(['', '✅ Para aprovar, é só me responder por aqui.', 'Qualquer dúvida, estou à disposição! 🤝'])
+    .join('\n');
+}
+const nomeArquivo = (b) => 'Orcamento-' + String(b.n).padStart(4, '0') + '-' + b.cliente.replace(/[^\w]+/g, '-').replace(/^-|-$/g, '') + '.pdf';
+function prepararPDF(b) {
+  if (!b._pdf) b._pdf = ensureFoto(b).then(() => gerarPDF({ b, nome: S.nome, logo: S.logo, foto: b.fotoData })).catch((e) => { b._pdf = null; throw e; });
+  return b._pdf;
+}
 const emptyDraft = () => ({ cliente: '', tel: '', bairro: '', itens: [], cobrado: null, foto: null });
 const blank = () => ({ uid: null, email: '', tema: 'artifex', logo: null, logoPath: null, nome: '', meta: 4000, custos: 0, dias: 12, hdia: 6, budgets: [], tabela: [], lanc: [], prompts: [], disp: {}, draft: emptyDraft(), osId: null });
 let S = blank();
@@ -196,7 +216,7 @@ function renderInicio() {
     '<div class="stats"><div><span class="num">' + env + '</span><span class="t">aguardando resposta</span></div><div><span class="num">' + ag.length + '</span><span class="t">serviços agendados</span></div><div><span class="num">' + avg + '</span><span class="t">valor/h real médio</span></div></div>' +
     (diff ? '<p class="small muted" style="margin:6px 0 0">Média dos serviços concluídos: ' + diff + '.</p>' : '') +
     '<h2>Próximo serviço</h2>' +
-    (prox ? '<div class="card stack"><div class="row" style="justify-content:space-between;flex-wrap:nowrap"><div style="min-width:0"><b>' + esc(prox.cliente) + '</b><div class="muted small">' + esc(prox.bairro) + ' · ' + prox.os.itens.length + ' serviços · previsto ' + fh(totalMin(prox.itens)) + '</div></div><span class="pill app">' + fmtDate(prox.os.data) + '</span></div><button class="btn" data-a="openos" data-id="' + prox.id + '">Abrir ordem de serviço</button></div>'
+    (prox ? '<div class="card stack"><div class="row" style="justify-content:space-between;flex-wrap:nowrap"><div style="min-width:0"><b>' + esc(prox.cliente) + '</b><div class="muted small">' + esc(curto(prox.bairro)) + ' · ' + prox.os.itens.length + ' serviços · previsto ' + fh(totalMin(prox.itens)) + '</div></div><span class="pill app">' + fmtDate(prox.os.data) + '</span></div><button class="btn" data-a="openos" data-id="' + prox.id + '">Abrir ordem de serviço</button></div>'
       : '<div class="card muted">Nenhum serviço agendado. Aprove um orçamento para gerar a ordem de serviço.</div>') +
     '<h2>Orçamentos não fechados</h2>' + perdidosHTML(true) +
     '<h2>Onde você perde tempo</h2>' +
@@ -256,8 +276,9 @@ function renderOrcar() {
     '<button class="linkbtn" style="text-decoration:none;padding:0" data-a="goto" data-v="orcamentos">‹ Orçamentos</button>' +
     '<h1 style="margin-top:6px">Novo orçamento</h1><p class="sub">Cliente, serviços e tempo de cada um. O preço sai do seu valor-hora.</p>' +
     '<div class="card stack"><label class="field"><span class="lbl">Nome do cliente</span><input class="in" data-d="cliente" value="' + esc(d.cliente) + '" placeholder="Ex.: Marina Souza"></label>' +
-    '<div class="grid2"><label class="field"><span class="lbl">WhatsApp (com DDD)</span><input class="in" inputmode="tel" data-d="tel" value="' + esc(d.tel) + '" placeholder="(31) 9 0000-0000"></label>' +
-    '<label class="field"><span class="lbl">Bairro</span><input class="in" data-d="bairro" value="' + esc(d.bairro) + '" placeholder="Bairro"></label></div></div>' +
+    '<label class="field"><span class="lbl">WhatsApp (com DDD)</span><input class="in" inputmode="tel" data-d="tel" value="' + esc(d.tel) + '" placeholder="(31) 9 0000-0000"></label>' +
+    '<label class="field"><span class="lbl">Endereço do cliente</span><textarea class="in" rows="2" data-d="bairro" placeholder="Cole aqui o endereço completo">' + esc(d.bairro) + '</textarea></label>' +
+    '<button class="btn ghost sm" type="button" data-a="maps">Abrir no Google Maps</button></div>' +
     '<h2>Serviços</h2>' +
     '<div class="stack" style="gap:8px;margin-bottom:10px">' + tabelaMod.picker() + '</div>' +
     '<div class="card" id="rows" style="padding-top:4px;padding-bottom:4px"></div>' +
@@ -316,14 +337,14 @@ function renderOrcamentos() {
     (list.length ? '<div class="stack">' + list.map((b) => {
       const s = status(b), p = pill[s];
       const glow = (s === 'aprovado' || s === 'concluido') ? ' glow-ok' : (s === 'recusado' ? ' glow-no' : '');
-      return '<div class="card stack' + glow + '"><div class="row" style="justify-content:space-between;flex-wrap:nowrap"><div style="min-width:0"><b>' + esc(b.cliente) + '</b><div class="muted small">Nº ' + String(b.n).padStart(4, '0') + ' · ' + esc(b.bairro || 'sem bairro') + ' · ' + fmtDate(b.data) + '</div></div><span class="pill ' + p[0] + '">' + p[1] + '</span></div>' +
+      return '<div class="card stack' + glow + '"><div class="row" style="justify-content:space-between;flex-wrap:nowrap"><div style="min-width:0"><b>' + esc(b.cliente) + '</b><div class="muted small">Nº ' + String(b.n).padStart(4, '0') + ' · ' + esc(curto(b.bairro) || 'sem endereço') + ' · ' + fmtDate(b.data) + '</div></div><span class="pill ' + p[0] + '">' + p[1] + '</span></div>' +
         (s === 'recusado' ? '<div class="row" style="gap:6px">' + (b.motivos.length ? b.motivos.map((m) => '<span class="pill no">' + esc(m) + '</span>').join('') : '<span class="muted small">Motivo não informado</span>') + '<button class="linkbtn" style="padding:4px 6px" data-a="recusar" data-id="' + b.id + '">' + (b.motivos.length ? 'Editar' : 'Informar motivo') + '</button></div>' + (b.obsRecusa ? '<div class="small muted">' + esc(b.obsRecusa) + '</div>' : '') : '') +
         '<div class="row" style="justify-content:space-between"><span class="muted small">' + b.itens.length + ' serviços · ' + fh(totalMin(b.itens)) + '</span><b class="num">' + brl(b.cobrado) + '</b></div>' +
         '<div class="row"><button class="btn ghost sm" data-a="ver" data-id="' + b.id + '">Ver e enviar</button>' +
         (s === 'enviado' ? '<button class="btn sm ok" data-a="aprovar" data-id="' + b.id + '">Aprovado</button><button class="btn sm no" data-a="recusar" data-id="' + b.id + '">Recusou</button>' : '') +
         (s === 'aprovado' ? '<button class="btn sm" data-a="openos" data-id="' + b.id + '">Abrir OS</button>' : '') +
         (s === 'concluido' ? '<button class="btn sm" data-a="openos" data-id="' + b.id + '">Ver resultado</button>' : '') +
-        '<button class="btn ghost sm del" data-a="delorc" data-id="' + b.id + '">Excluir</button></div></div>';
+        (b.bairro ? '<button class="btn ghost sm" data-a="maps" data-id="' + b.id + '">Mapa</button>' : '') + '<button class="btn ghost sm del" data-a="delorc" data-id="' + b.id + '">Excluir</button></div></div>';
     }).join('') + '</div>' : '<div class="card muted">Nenhum orçamento ainda. Toque em "Novo orçamento".</div>');
 }
 
@@ -340,13 +361,14 @@ function showSheet(id) {
     '<div class="hd"><span class="slot">' + (S.logo ? '<img src="' + S.logo + '" alt="Logo">' : UPLOAD) + '</span><div><b>' + esc(S.nome || 'Seu nome ou empresa') + '</b><span class="muted small">Montagem e instalação de móveis</span></div></div>' +
     '<div class="bd">' + (b.fotoData ? '<div class="photo" style="background-image:url(' + b.fotoData + ')"></div>' : '') +
     '<span class="lbl">Orçamento Nº ' + String(b.n).padStart(4, '0') + '</span>' +
-    '<dl class="kv"><dt>Cliente</dt><dd>' + esc(b.cliente) + '</dd><dt>Bairro</dt><dd>' + esc(b.bairro || '—') + '</dd><dt>Emissão</dt><dd>' + fmtDate(b.data) + '</dd><dt>Validade</dt><dd>' + String(val.getDate()).padStart(2, '0') + '/' + String(val.getMonth() + 1).padStart(2, '0') + '</dd></dl>' +
+    '<dl class="kv"><dt>Cliente</dt><dd>' + esc(b.cliente) + '</dd><dt>Endereço</dt><dd>' + esc(b.bairro || '—') + '</dd><dt>Emissão</dt><dd>' + fmtDate(b.data) + '</dd><dt>Validade</dt><dd>' + String(val.getDate()).padStart(2, '0') + '/' + String(val.getMonth() + 1).padStart(2, '0') + '</dd></dl>' +
     '<h2>Serviços</h2><div class="tw"><table><tr><th>Móvel</th><th>Serviço</th><th class="r">Tempo</th></tr>' + b.itens.map((i) => '<tr><td>' + esc(i.nome) + '</td><td>' + esc(i.tipo) + '</td><td class="r">' + fh(i.min) + '</td></tr>').join('') + '</table></div>' +
     '<div class="tot"><span class="lbl" style="margin:0">Total</span><span class="num">' + brl(b.cobrado) + '</span></div>' +
     '<p class="small muted" style="margin:6px 0 0">Não incluso: frete, serviços extras durante o atendimento e avarias nas peças que impeçam a montagem.</p>' +
     '<label class="field" style="margin-top:16px"><span class="lbl">WhatsApp do cliente (com DDD)</span><input class="in" id="sheet-tel" inputmode="tel" value="' + esc(b.tel) + '" placeholder="(31) 9 0000-0000"></label>' +
-    '<div class="stack" style="margin-top:12px"><button class="btn block" data-a="zap" data-id="' + b.id + '">Enviar no WhatsApp</button><button class="btn ghost block" data-a="pdf" data-id="' + b.id + '">Compartilhar PDF</button><button class="btn ghost block" data-a="fechar">Fechar</button></div>' +
-    '<p class="small muted" style="margin:10px 0 0">O WhatsApp abre direto na conversa com o cliente, com o resumo e o link do PDF já na mensagem.</p></div></div></div>';
+    '<div class="stack" style="margin-top:12px"><button class="btn block" data-a="zapfile" data-id="' + b.id + '">Enviar PDF + texto no WhatsApp</button><button class="btn ghost block" data-a="zap" data-id="' + b.id + '">Abrir conversa do cliente (texto + link)</button>' + (b.bairro ? '<button class="btn ghost block" data-a="maps" data-id="' + b.id + '">Abrir endereço no Maps</button>' : '') + '<button class="btn ghost block" data-a="fechar">Fechar</button></div>' +
+    '<p class="small muted" style="margin:10px 0 0"><b>PDF + texto:</b> o celular abre a lista de apps; escolha o WhatsApp e depois o contato. O PDF e a mensagem vão juntos. <b>Abrir conversa:</b> vai direto no número do cliente, mas o PDF segue como link dentro do texto, porque o WhatsApp não deixa anexar arquivo por esse caminho.</p></div></div></div>';
+  prepararPDF(b).catch(() => {});
   if (b.fotoPath && !b.fotoData) ensureFoto(b).then(() => { if (!$('#sheet').hidden && $('#sheet').dataset.id === id && b.fotoData) showSheet(id); });
 }
 
@@ -356,7 +378,7 @@ function renderServico() {
   const b = curB(), el = $('#v-servico');
   if (!b) { el.innerHTML = '<h1>Serviço do dia</h1><div class="card muted">Nenhuma ordem de serviço aberta. Aprove um orçamento na aba Orçamentos.</div>'; return; }
   const os = b.os, fim = !!os.fim, allDone = os.itens.every((i) => i.done);
-  el.innerHTML = '<button class="linkbtn" style="text-decoration:none;padding:0" data-a="goto" data-v="orcamentos">‹ Orçamentos</button><h1 style="margin-top:6px">' + esc(b.cliente) + '</h1><p class="sub">' + esc(b.bairro || '') + ' · OS do orçamento Nº ' + String(b.n).padStart(4, '0') + ' · ' + brl(b.cobrado) + '</p>' +
+  el.innerHTML = '<button class="linkbtn" style="text-decoration:none;padding:0" data-a="goto" data-v="orcamentos">‹ Orçamentos</button><h1 style="margin-top:6px">' + esc(b.cliente) + '</h1><p class="sub">' + esc(curto(b.bairro)) + ' · OS do orçamento Nº ' + String(b.n).padStart(4, '0') + ' · ' + brl(b.cobrado) + '</p>' + (b.bairro ? '<div class="card" style="margin-bottom:12px"><div class="small muted" style="margin-bottom:8px;overflow-wrap:anywhere">' + esc(b.bairro) + '</div><button class="btn ghost sm" data-a="maps" data-id="' + b.id + '">Abrir no Google Maps</button></div>' : '') +
     '<div class="card stack"><div class="grid2"><label class="field"><span class="lbl">Data do serviço</span><input class="in" type="date" id="os-data" value="' + esc(os.data || '') + '"></label>' +
     '<div><span class="lbl">Chegada</span>' + (os.checkin ? '<div class="num" style="padding:10px 0">' + new Date(os.checkin).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) + '</div>' : '<button class="btn sm block" data-a="checkin"' + (fim ? ' disabled' : '') + '>Check-in</button>') + '</div></div></div>' +
     '<h2>Ferramentas</h2><div class="card"><div class="grid2">' + TOOLS.map((t) => '<label class="chk"><input type="checkbox" data-tool="' + esc(t) + '"' + (os.tools[t] !== false ? ' checked' : '') + '> <span>' + esc(t) + '</span></label>').join('') + '</div>' +
@@ -385,7 +407,7 @@ function resultHTML(b) {
 /* ---------- roteamento ---------- */
 const num = (v) => { const t = String(v == null ? '' : v).trim(); if (!t) return NaN; return parseFloat(t.indexOf(',') > -1 ? t.replace(/\./g, '').replace(',', '.') : t); };
 const ctx = {
-  get S() { return S; }, $, esc, brl, fh, fmtDate, dayStr, toast, num, avgReal,
+  get S() { return S; }, $, esc, curto, brl, fh, fmtDate, dayStr, toast, num, avgReal,
   refreshOrcar() { drawRows(); updOrc(); },
 };
 const VIEWS = {
@@ -454,40 +476,50 @@ document.addEventListener('click', async (e) => {
       return;
     }
     if (a === 'ver') { showSheet(id); return; }
+    if (a === 'maps') {
+      const bb = id ? S.budgets.filter((x) => x.id === id)[0] : null;
+      const addr = bb ? bb.bairro : S.draft.bairro;
+      if (!addr || !addr.trim()) { toast('Cole o endereço primeiro'); return; }
+      window.open(mapsUrl(addr), '_blank', 'noopener'); return;
+    }
+    if (a === 'zapfile') {
+      const b = S.budgets.filter((x) => x.id === id)[0]; if (!b) return;
+      const tel = ($('#sheet-tel').value || '').trim();
+      if (tel !== b.tel) { b.tel = tel; bg(api.setTel(b.id, tel)); }
+      const txt = t.textContent; t.disabled = true; t.textContent = 'Preparando PDF…';
+      let blob;
+      try { blob = await prepararPDF(b); } catch (err) { toast('Não consegui gerar o PDF.'); t.disabled = false; t.textContent = txt; return; }
+      const msg = mensagemZap(b, '');
+      const file = new File([blob], nomeArquivo(b), { type: 'application/pdf' });
+      t.disabled = false; t.textContent = txt;
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try { navigator.clipboard.writeText(msg).catch(() => {}); } catch (e) { /* sem área de transferência */ }
+        try { await navigator.share({ files: [file], text: msg, title: 'Orçamento ' + b.cliente }); toast('Se a mensagem não vier junto, é só colar: já copiei o texto'); }
+        catch (e) { if (e && e.name !== 'AbortError') toast('Não consegui abrir o compartilhamento. Toque de novo.'); }
+        return;
+      }
+      // sem compartilhamento de arquivo (computador): baixa o PDF e abre a conversa com o texto
+      const au = document.createElement('a'); au.href = URL.createObjectURL(blob); au.download = nomeArquivo(b); document.body.appendChild(au); au.click(); au.remove();
+      toast('PDF baixado. Anexe na conversa do WhatsApp.');
+      const dg = tel.replace(/\D/g, '');
+      if (dg.length >= 10) window.open('https://wa.me/' + (dg.length >= 12 && dg.slice(0, 2) === '55' ? dg : '55' + dg) + '?text=' + encodeURIComponent(msg), '_blank', 'noopener');
+      return;
+    }
     if (a === 'zap') {
       const b = S.budgets.filter((x) => x.id === id)[0]; if (!b) return;
       const tel = ($('#sheet-tel').value || '').trim(), dig = tel.replace(/\D/g, '');
       if (dig.length < 10) { toast('Informe o WhatsApp do cliente com DDD'); return; }
       const full = dig.length >= 12 && dig.slice(0, 2) === '55' ? dig : '55' + dig;
       if (tel !== b.tel) { b.tel = tel; bg(api.setTel(b.id, tel)); }
-      t.disabled = true; t.textContent = 'Preparando…';
+      const txt = t.textContent; t.disabled = true; t.textContent = 'Preparando…';
       let link = '';
       try {
-        await ensureFoto(b);
-        const blob = await gerarPDF({ b, nome: S.nome, logo: S.logo, foto: b.fotoData });
+        const blob = await prepararPDF(b);
         const path = S.uid + '/pdf/orcamento-' + b.id + '.pdf';
         await api.uploadPdf(path, blob); link = await api.signedUrl(path, 60 * 60 * 24 * 30);
       } catch (err) { toast('Não consegui anexar o link do PDF. Enviando só o resumo.'); }
-      const primeiro = b.cliente.trim().split(/\s+/)[0];
-      const msg = 'Olá, ' + primeiro + '! Segue o orçamento Nº ' + String(b.n).padStart(4, '0') + (S.nome ? ' - ' + S.nome : '') + ':\n\n' +
-        b.itens.map((i) => '• ' + i.nome + ' (' + i.tipo.toLowerCase() + ')').join('\n') +
-        '\n\nTotal: ' + brl(b.cobrado) + '\nPrevisão de execução: ' + fh(totalMin(b.itens)) + '\nValidade: 7 dias.' +
-        (link ? '\n\nOrçamento completo em PDF (link válido por 30 dias):\n' + link : '');
-      t.disabled = false; t.textContent = 'Enviar no WhatsApp';
-      window.location.href = 'https://wa.me/' + full + '?text=' + encodeURIComponent(msg);
-      return;
-    }
-    if (a === 'pdf') {
-      const b = S.budgets.filter((x) => x.id === id)[0]; if (!b) return;
-      t.disabled = true; t.textContent = 'Gerando PDF…';
-      try {
-        await ensureFoto(b);
-        const blob = await gerarPDF({ b, nome: S.nome, logo: S.logo, foto: b.fotoData });
-        const nomeArq = 'Orcamento-' + String(b.n).padStart(4, '0') + '-' + b.cliente.replace(/[^\w]+/g, '-').replace(/^-|-$/g, '') + '.pdf';
-        const r = await compartilharPDF(blob, nomeArq, 'Orçamento ' + b.cliente);
-        if (r === 'baixado') toast('PDF baixado');
-      } catch (err) { toast('Não consegui gerar o PDF.'); }
-      t.disabled = false; t.textContent = 'Compartilhar PDF';
+      t.disabled = false; t.textContent = txt;
+      window.location.href = 'https://wa.me/' + full + '?text=' + encodeURIComponent(mensagemZap(b, link));
       return;
     }
     if (a === 'aprovar') {

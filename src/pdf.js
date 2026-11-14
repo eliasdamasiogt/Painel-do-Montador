@@ -73,14 +73,15 @@ export async function gerarPDF({ b, nome, logo, foto }) {
   const fim = foto ? await loadImg(foto) : null;
   const ps = fim ? fit(fim, 70, 70) : null;
   const valW = (ps ? W - M - ps.w - 6 : W - M) - (M + 28);
-  const rows = [['Cliente', b.cliente], ['Contato', b.tel || '-'], ['Bairro', b.bairro || '-'], ['Emissão', fdate(b.data)], ['Validade', vd]];
+  const rows = [['Cliente', b.cliente], ['Contato', b.tel || '-'], ['Endereço', b.bairro || '-'], ['Emissão', fdate(b.data)], ['Validade', vd]];
   let y = 67;
   doc.setFontSize(10.5);
   rows.forEach(([k, v]) => {
     doc.setFont('helvetica', 'normal'); ink(C.muted); doc.text(k, M, y);
     doc.setFont('helvetica', 'bold'); ink(C.text);
-    doc.text(doc.splitTextToSize(String(v), valW)[0], M + 28, y);
-    y += 7;
+    const ls = doc.splitTextToSize(String(v), valW).slice(0, 3);
+    ls.forEach((ln, i) => doc.text(ln, M + 28, y + i * 4.6));
+    y += 7 + (ls.length - 1) * 4.6;
   });
   if (ps) {
     doc.addImage(foto, fmt(foto), W - M - ps.w, 52, ps.w, ps.h);
