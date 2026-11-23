@@ -202,6 +202,10 @@ export async function setEndereco(id, endereco) {
   const { error } = await supabase.from('orcamentos').update({ endereco }).eq('id', id);
   fail(error);
 }
+export async function setValor(id, valor) {
+  const { error } = await supabase.from('orcamentos').update({ valor_cobrado: valor }).eq('id', id);
+  fail(error);
+}
 export async function setTel(id, tel) {
   const { error } = await supabase.from('orcamentos').update({ telefone: tel }).eq('id', id);
   fail(error);

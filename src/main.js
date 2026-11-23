@@ -352,6 +352,21 @@ async function ensureFoto(b) {
   await Promise.all(jobs);
 }
 const temFotoPend = (b) => !b._fotoTry && ((b.fotoPath && !b.fotoData) || b.itens.some((i) => i.fotoPath && !i.fotoData));
+function precoInfo(b, v) {
+  const m = totalMin(b.itens), vh = hourly(), eff = m > 0 ? v / (m / 60) : 0;
+  if (!(v > 0) || m <= 0) return '<span class="muted small">Informe um valor maior que zero.</span>';
+  const ok = eff >= vh * 0.95;
+  return '<div class="row" style="justify-content:space-between"><span class="muted small">Valor/h neste preço</span><b class="num">' + brl(eff) + '/h</b></div>' +
+    '<div class="note"' + (ok ? '' : ' style="border-color:var(--bad)"') + '>' + (ok ? 'Compensa: fica em ou acima do seu valor-hora ideal de ' + brl(vh) + '.' : 'Abaixo do seu valor-hora ideal de ' + brl(vh) + '. Você ganha ' + brl(vh * m / 60 - v) + ' a menos que o ideal neste serviço.') + '</div>';
+}
+function precoBox(b) {
+  const s = status(b); if (s !== 'enviado' && s !== 'aprovado') return '';
+  return '<div class="card stack" style="margin-top:14px"><span class="lbl" style="margin:0">Ajustar preço (desconto ou aumento)</span>' +
+    '<label class="field"><span class="lbl">Novo valor (R$)</span><input class="in" inputmode="decimal" id="sheet-preco" value="' + b.cobrado + '"></label>' +
+    '<div id="preco-info" class="stack" style="gap:8px">' + precoInfo(b, b.cobrado) + '</div>' +
+    '<button class="btn sm" data-a="preco-save" data-id="' + b.id + '">Salvar novo preço</button>' +
+    '<p class="small muted" style="margin:0">Depois de salvar, o PDF e a mensagem do WhatsApp já saem com o valor novo.</p></div>';
+}
 function showSheet(id) {
   const b = S.budgets.filter((x) => x.id === id)[0]; if (!b) return;
   const el = $('#sheet'); el.hidden = false; el.dataset.id = id;
@@ -363,6 +378,7 @@ function showSheet(id) {
     '<dl class="kv"><dt>Cliente</dt><dd>' + esc(b.cliente) + '</dd><dt>Bairro</dt><dd>' + esc(b.bairro || '—') + '</dd><dt>Emissão</dt><dd>' + fmtDate(b.data) + '</dd><dt>Validade</dt><dd>' + String(val.getDate()).padStart(2, '0') + '/' + String(val.getMonth() + 1).padStart(2, '0') + '</dd></dl>' +
     '<h2>Serviços</h2><div class="tw"><table><tr><th>Móvel</th><th>Serviço</th><th class="r">Tempo</th></tr>' + b.itens.map((i) => '<tr><td>' + esc(i.nome) + '</td><td>' + esc(i.tipo) + '</td><td class="r">' + fh(i.min) + '</td></tr>').join('') + '</table></div>' +
     '<div class="tot"><span class="lbl" style="margin:0">Total</span><span class="num">' + brl(b.cobrado) + '</span></div>' +
+    precoBox(b) +
     '<p class="small muted" style="margin:6px 0 0">Não incluso: frete, serviços extras durante o atendimento e avarias nas peças que impeçam a montagem.</p>' +
     '<label class="field" style="margin-top:16px"><span class="lbl">WhatsApp do cliente (com DDD)</span><input class="in" id="sheet-tel" inputmode="tel" value="' + esc(b.tel) + '" placeholder="(31) 9 0000-0000"></label>' +
     '<div class="stack" style="margin-top:12px"><button class="btn block" data-a="zap" data-id="' + b.id + '">Enviar no WhatsApp do cliente</button><button class="btn ghost block" data-a="zapfile" data-id="' + b.id + '">Anexar o PDF (escolher o contato)</button><button class="btn ghost block" data-a="copiamsg" data-id="' + b.id + '">Copiar só a mensagem</button><button class="btn ghost block" data-a="fechar">Fechar</button></div>' +
@@ -476,6 +492,16 @@ document.addEventListener('click', async (e) => {
       return;
     }
     if (a === 'ver') { showSheet(id); return; }
+    if (a === 'preco-save') {
+      const bb = S.budgets.filter((x) => x.id === id)[0]; if (!bb) return;
+      const v = parseFloat(String($('#sheet-preco').value).replace(',', '.'));
+      if (!(v > 0)) { toast('Informe um valor válido'); return; }
+      t.disabled = true;
+      try { await api.setValor(id, v); } catch (er) { t.disabled = false; toast('Não consegui salvar o novo preço. Tente de novo.'); return; }
+      bb.cobrado = Math.round(v * 100) / 100; bb._pdf = null;
+      toast('Preço atualizado'); showSheet(id); if (location.hash === '#orcamentos' || !location.hash) route();
+      return;
+    }
     if (a === 'maps') {
       const bb = S.budgets.filter((x) => x.id === id)[0];
       const ta = $('[data-end]'), addr = ((ta && ta.value) || (bb && bb.endereco) || '').trim();
@@ -584,6 +610,10 @@ document.addEventListener('input', (e) => {
   if (t.id === 'nome') { S.nome = t.value; saveAllProfile(); renderTop(); return; }
   if (t.hasAttribute('data-n')) { S[t.getAttribute('data-n')] = parseFloat(String(t.value).replace(',', '.')) || 0; saveAllProfile(); updValor(); return; }
   if (t.hasAttribute('data-d')) { S.draft[t.getAttribute('data-d')] = t.value; return; }
+  if (t.id === 'sheet-preco') {
+    const bb = S.budgets.filter((x) => x.id === $('#sheet').dataset.id)[0], v = parseFloat(String(t.value).replace(',', '.'));
+    if (bb) $('#preco-info').innerHTML = precoInfo(bb, v); return;
+  }
   if (t.id === 'o-cob') { const v = parseFloat(String(t.value).replace(',', '.')); S.draft.cobrado = isNaN(v) ? null : v; updOrc(); return; }
   if (t.hasAttribute('data-f')) { const r = +t.closest('[data-r]').getAttribute('data-r'), f = t.getAttribute('data-f'); S.draft.itens[r][f] = f === 'min' ? (parseInt(t.value, 10) || 0) : t.value; updOrc(); return; }
   if (t.id === 'os-extra') { const b = curB(); if (b) { b.os.extras = t.value; clearTimeout(t._tm); t._tm = setTimeout(() => bg(api.updateOS(b.os.id, { extras: b.os.extras })), 600); } }
