@@ -53,7 +53,7 @@ function mapBudget(r) {
     motivos: r.motivos_recusa || [],
     obsRecusa: r.obs_recusa || '',
     data: localDay(r.created_at),
-    itens: (r.orcamento_itens || []).slice().sort(byOrdem).map((i) => ({ nome: i.nome, tipo: i.tipo, min: i.minutos_previstos })),
+    itens: (r.orcamento_itens || []).slice().sort(byOrdem).map((i) => ({ nome: i.nome, tipo: i.tipo, min: i.minutos_previstos, fotoPath: i.foto_path || null, fotoData: null })),
     os: mapOS(o),
   };
 }
@@ -223,25 +223,27 @@ export async function saveProfile(userId, v) {
 
 /* ---------- orçamentos ---------- */
 export async function createBudget(userId, d) {
-  let fotoPath = null;
-  if (d.foto) {
-    fotoPath = `${userId}/fotos/${crypto.randomUUID()}.jpg`;
-    await uploadImage(fotoPath, d.foto);
-  }
+  const paths = await Promise.all(d.itens.map(async (i) => {
+    if (!i.foto) return null;
+    const p = `${userId}/fotos/${crypto.randomUUID()}.jpg`;
+    await uploadImage(p, i.foto);
+    return p;
+  }));
   const { data: o, error } = await supabase
     .from('orcamentos')
-    .insert({ cliente: d.cliente, telefone: d.tel, bairro: d.bairro, valor_cobrado: d.cobrado, foto_path: fotoPath })
+    .insert({ cliente: d.cliente, telefone: d.tel, bairro: d.bairro, valor_cobrado: d.cobrado })
     .select()
     .single();
   fail(error);
-  const itens = d.itens.map((i, k) => ({ orcamento_id: o.id, ordem: k, nome: i.nome, tipo: i.tipo, minutos_previstos: i.min }));
+  const itens = d.itens.map((i, k) => ({ orcamento_id: o.id, ordem: k, nome: i.nome, tipo: i.tipo, minutos_previstos: i.min, foto_path: paths[k] }));
   const { error: e2 } = await supabase.from('orcamento_itens').insert(itens);
   if (e2) {
     await supabase.from('orcamentos').delete().eq('id', o.id);
+    const orf = paths.filter(Boolean); if (orf.length) { try { await supabase.storage.from(BUCKET).remove(orf); } catch (e) { /* ok */ } }
     fail(e2);
   }
   const b = mapBudget({ ...o, orcamento_itens: itens.map((i) => ({ ...i })), ordens_servico: null });
-  b.fotoData = d.foto || null;
+  b.itens.forEach((it, k) => { it.fotoData = d.itens[k].foto || null; });
   return b;
 }
 
@@ -261,7 +263,7 @@ export async function approve(b, dataServico) {
     .select()
     .single();
   fail(error);
-  const rows = b.itens.map((i, k) => ({ ordem_id: o.id, ordem: k, nome: i.nome, tipo: i.tipo, minutos_previstos: i.min }));
+  const rows = b.itens.map((i, k) => ({ ordem_id: o.id, ordem: k, nome: i.nome, tipo: i.tipo, minutos_previstos: i.min, foto_path: paths[k] }));
   const { data: its, error: e2 } = await supabase.from('os_itens').insert(rows).select();
   if (e2) {
     await supabase.from('ordens_servico').delete().eq('id', o.id);

@@ -54,7 +54,7 @@ function prepararPDF(b) {
   if (!b._pdf) b._pdf = ensureFoto(b).then(() => gerarPDF({ b, nome: S.nome, logo: S.logo, foto: b.fotoData })).catch((e) => { b._pdf = null; throw e; });
   return b._pdf;
 }
-const emptyDraft = () => ({ cliente: '', tel: '', bairro: '', itens: [], cobrado: null, foto: null });
+const emptyDraft = () => ({ cliente: '', tel: '', bairro: '', itens: [], cobrado: null });
 const blank = () => ({ uid: null, email: '', tema: 'artifex', logo: null, logoPath: null, nome: '', meta: 4000, custos: 0, dias: 12, hdia: 6, budgets: [], tabela: [], lanc: [], prompts: [], disp: {}, draft: emptyDraft(), osId: null });
 let S = blank();
 
@@ -278,8 +278,6 @@ function renderOrcar() {
     '<h2>Serviços</h2>' +
     '<div class="stack" style="gap:8px;margin-bottom:10px">' + tabelaMod.picker() + '</div>' +
     '<div class="card" id="rows" style="padding-top:4px;padding-bottom:4px"></div>' +
-    '<h2>Foto do móvel</h2>' +
-    '<div class="card row" style="flex-wrap:nowrap"><button class="slot big" style="border-radius:12px;width:96px" data-a="foto" aria-label="Enviar foto do móvel">' + (d.foto ? '<img src="' + d.foto + '" alt="Foto do móvel">' : UPLOAD + '<span>Foto</span>') + '</button><p class="small muted" style="margin:0">Opcional. A foto aparece no orçamento em PDF.</p></div>' +
     '<h2>Resumo</h2>' +
     '<div class="card stack"><div class="row" style="justify-content:space-between"><span class="muted">Tempo total</span><b class="num" id="o-total"></b></div>' +
     '<div class="row" style="justify-content:space-between"><span class="muted">Previsão</span><b id="o-dias"></b></div>' +
@@ -299,6 +297,7 @@ function drawRows() {
     '<label class="field tp"><span class="lbl">Tipo</span><select class="in" data-f="tipo">' + TIPOS.map((t) => '<option' + (t === it.tipo ? ' selected' : '') + '>' + t + '</option>').join('') + '</select></label>' +
     '<label class="field" style="grid-column:2"><span class="lbl">Minutos</span><input class="in" inputmode="numeric" data-f="min" value="' + it.min + '"></label>' +
     '<button class="x" data-a="delrow" data-i="' + i + '" aria-label="Remover serviço">✕</button>' +
+    '<div class="row ph" style="grid-column:1/4;flex-wrap:nowrap;gap:10px"><button class="slot" style="border-radius:10px;width:64px;height:64px;flex:none" data-a="ifoto" data-i="' + i + '" aria-label="Foto de ' + esc(it.nome || 'este móvel') + '">' + (it.foto ? '<img src="' + it.foto + '" alt="Foto">' : UPLOAD) + '</button><span class="small muted">' + (it.foto ? 'Foto anexada. Toque para trocar.' : 'Foto deste móvel (opcional). Aparece no PDF.') + '</span>' + (it.foto ? '<button class="chip" data-a="ifotodel" data-i="' + i + '">Remover</button>' : '') + '</div>' +
     (it.refMin != null ? '<div class="small muted" style="grid-column:1/4">Referência de mercado: ' + (it.refMax == null ? brl(it.refMin) : brl(it.refMin) + ' a ' + brl(it.refMax)) + '</div>' : '') + '</div>').join('')
     : '<p class="muted" style="margin:14px 0">Busque um móvel na tabela acima ou toque em "Outro móvel" para adicionar o primeiro serviço.</p>';
 }
@@ -346,16 +345,20 @@ function renderOrcamentos() {
 
 /* ---------- folha do orçamento ---------- */
 async function ensureFoto(b) {
-  if (b.fotoData || !b.fotoPath) return;
-  try { b.fotoData = await api.downloadAsDataUrl(b.fotoPath); } catch (e) { /* segue sem foto */ }
+  b._fotoTry = true;
+  const jobs = [];
+  if (b.fotoPath && !b.fotoData) jobs.push(api.downloadAsDataUrl(b.fotoPath).then((u) => { b.fotoData = u; }).catch(() => {}));
+  b.itens.forEach((i) => { if (i.fotoPath && !i.fotoData) jobs.push(api.downloadAsDataUrl(i.fotoPath).then((u) => { i.fotoData = u; }).catch(() => {})); });
+  await Promise.all(jobs);
 }
+const temFotoPend = (b) => !b._fotoTry && ((b.fotoPath && !b.fotoData) || b.itens.some((i) => i.fotoPath && !i.fotoData));
 function showSheet(id) {
   const b = S.budgets.filter((x) => x.id === id)[0]; if (!b) return;
   const el = $('#sheet'); el.hidden = false; el.dataset.id = id;
   const val = new Date(b.data + 'T12:00:00'); val.setDate(val.getDate() + 7);
   el.innerHTML = '<div class="sheet-wrap" data-a="fechar"><div class="sheet" data-stop>' +
     '<div class="hd"><span class="slot">' + (S.logo ? '<img src="' + S.logo + '" alt="Logo">' : UPLOAD) + '</span><div><b>' + esc(S.nome || 'Seu nome ou empresa') + '</b><span class="muted small">Montagem e instalação de móveis</span></div></div>' +
-    '<div class="bd">' + (b.fotoData ? '<div class="photo" style="background-image:url(' + b.fotoData + ')"></div>' : '') +
+    '<div class="bd">' + (b.fotoData ? '<div class="photo" style="background-image:url(' + b.fotoData + ')"></div>' : '') + b.itens.filter((i) => i.fotoData).map((i) => '<div class="photo" style="background-image:url(' + i.fotoData + ')"></div><div class="small muted" style="margin:-10px 0 14px">' + esc(i.nome) + '</div>').join('') +
     '<span class="lbl">Orçamento Nº ' + String(b.n).padStart(4, '0') + '</span>' +
     '<dl class="kv"><dt>Cliente</dt><dd>' + esc(b.cliente) + '</dd><dt>Bairro</dt><dd>' + esc(b.bairro || '—') + '</dd><dt>Emissão</dt><dd>' + fmtDate(b.data) + '</dd><dt>Validade</dt><dd>' + String(val.getDate()).padStart(2, '0') + '/' + String(val.getMonth() + 1).padStart(2, '0') + '</dd></dl>' +
     '<h2>Serviços</h2><div class="tw"><table><tr><th>Móvel</th><th>Serviço</th><th class="r">Tempo</th></tr>' + b.itens.map((i) => '<tr><td>' + esc(i.nome) + '</td><td>' + esc(i.tipo) + '</td><td class="r">' + fh(i.min) + '</td></tr>').join('') + '</table></div>' +
@@ -365,7 +368,7 @@ function showSheet(id) {
     '<div class="stack" style="margin-top:12px"><button class="btn block" data-a="zap" data-id="' + b.id + '">Enviar no WhatsApp do cliente</button><button class="btn ghost block" data-a="zapfile" data-id="' + b.id + '">Anexar o PDF (escolher o contato)</button><button class="btn ghost block" data-a="copiamsg" data-id="' + b.id + '">Copiar só a mensagem</button><button class="btn ghost block" data-a="fechar">Fechar</button></div>' +
     '<p class="small muted" style="margin:10px 0 0"><b>Enviar no WhatsApp do cliente:</b> abre direto a conversa com o número informado, com a mensagem pronta e o link do PDF no fim. <b>Anexar o PDF:</b> manda o arquivo de verdade, mas o celular pede para você escolher o contato (o WhatsApp não permite as duas coisas juntas).</p></div></div></div>';
   prepararPDF(b).catch(() => {});
-  if (b.fotoPath && !b.fotoData) ensureFoto(b).then(() => { if (!$('#sheet').hidden && $('#sheet').dataset.id === id && b.fotoData) showSheet(id); });
+  if (temFotoPend(b)) ensureFoto(b).then(() => { if (!$('#sheet').hidden && $('#sheet').dataset.id === id) showSheet(id); });
 }
 
 /* ---------- SERVIÇO ---------- */
@@ -431,7 +434,8 @@ document.addEventListener('click', async (e) => {
   try {
     if (a === 'fechar') { if (e.target.closest('[data-stop]') && t.classList.contains('sheet-wrap')) return; $('#sheet').hidden = true; $('#sheet').innerHTML = ''; return; }
     if (a === 'logo') { $('#logoFile').click(); return; }
-    if (a === 'foto') { $('#fotoFile').click(); return; }
+    if (a === 'ifoto') { S.fotoIdx = +t.dataset.i; $('#fotoFile').click(); return; }
+    if (a === 'ifotodel') { const it = S.draft.itens[+t.dataset.i]; if (it) { it.foto = null; drawRows(); } return; }
     if (a === 'sair') { await api.sair(); return; }
     if (a === 'tema') { S.tema = aplicaTema(t.getAttribute('data-t')); bg(api.saveProfile(S.uid, { tema: S.tema })); renderMais(); return; }
     if (a === 'delconta') {
@@ -450,7 +454,7 @@ document.addEventListener('click', async (e) => {
       t.disabled = true; t.textContent = 'Salvando…';
       const sug = round5(totalMin(its) / 60 * hourly());
       try {
-        const b = await api.createBudget(S.uid, { cliente: d.cliente.trim(), tel: d.tel, bairro: d.bairro, cobrado: d.cobrado == null ? sug : d.cobrado, foto: d.foto, itens: its.map((x) => ({ nome: x.nome.trim(), tipo: x.tipo, min: +x.min })) });
+        const b = await api.createBudget(S.uid, { cliente: d.cliente.trim(), tel: d.tel, bairro: d.bairro, cobrado: d.cobrado == null ? sug : d.cobrado, itens: its.map((x) => ({ nome: x.nome.trim(), tipo: x.tipo, min: +x.min, foto: x.foto || null })) });
         S.budgets.push(b); S.draft = emptyDraft(); go('orcamentos'); showSheet(b.id);
       } catch (err) { t.disabled = false; t.textContent = 'Gerar orçamento'; toast('Não consegui salvar o orçamento. Tente de novo.'); }
       return;
@@ -461,7 +465,7 @@ document.addEventListener('click', async (e) => {
         setTimeout(() => { t.dataset.arm = ''; t.textContent = txt; t.classList.remove('arm'); }, 3500); return;
       }
       const bb = S.budgets.filter((x) => x.id === id)[0]; if (!bb) return;
-      const paths = [bb.fotoPath, S.uid + '/pdf/orcamento-' + bb.id + '.pdf'].filter(Boolean);
+      const paths = [bb.fotoPath, ...bb.itens.map((x) => x.fotoPath), S.uid + '/pdf/orcamento-' + bb.id + '.pdf'].filter(Boolean);
       t.disabled = true;
       try { await api.deleteBudget(id, paths); } catch (er) { t.disabled = false; throw er; }
       S.budgets = S.budgets.filter((x) => x.id !== id);
@@ -611,7 +615,7 @@ $('#logoFile').addEventListener('change', (e) => {
 });
 $('#fotoFile').addEventListener('change', (e) => {
   const f = e.target.files[0]; if (!f) return;
-  fileToData(f, 1000, 'image/jpeg', 0.82, (u) => { S.draft.foto = u; renderOrcar(); });
+  fileToData(f, 1000, 'image/jpeg', 0.82, (u) => { const it = S.draft.itens[S.fotoIdx]; if (it) { it.foto = u; drawRows(); } });
   e.target.value = '';
 });
 setInterval(() => {

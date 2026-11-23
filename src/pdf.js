@@ -124,11 +124,39 @@ export async function gerarPDF({ b, nome, logo, foto }) {
   doc.setFont('helvetica', 'normal'); doc.setFontSize(9); ink(C.muted);
   doc.text(`Tempo estimado de execução: ${fh(b.itens.reduce((s, i) => s + i.min, 0))}`, M, y);
 
-  // Rodapé
+  // Fotos dos móveis (uma por item que tiver foto), em grade de 2 colunas
+  const comFoto = b.itens.filter((i) => i.fotoData);
+  const LIM = H - 34;
+  const novaPagina = () => { doc.addPage(); fill(C.bg); doc.rect(0, 0, W, H, 'F'); return 20; };
+  if (comFoto.length) {
+    y += 14;
+    if (y + 20 > LIM) y = novaPagina();
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); ink(C.champ);
+    spaced(comFoto.length > 1 ? 'FOTOS DOS MÓVEIS' : 'FOTO DO MÓVEL', M, y, 1.4);
+    y += 4;
+    stroke(C.line); doc.setLineWidth(0.2); doc.line(M, y, W - M, y);
+    y += 6;
+    const cw = (W - M * 2 - 8) / 2, ch = 62, rh = ch + 12;
+    for (let k = 0; k < comFoto.length; k += 2) {
+      if (y + rh > LIM) y = novaPagina();
+      for (let c = 0; c < 2 && k + c < comFoto.length; c++) {
+        const it = comFoto[k + c], im = await loadImg(it.fotoData), x = M + c * (cw + 8);
+        if (im) { const f = fit(im, cw, ch); doc.addImage(it.fotoData, fmt(it.fotoData), x, y + (ch - f.h) / 2, f.w, f.h); }
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(9); ink(C.text);
+        doc.text(doc.splitTextToSize(it.nome, cw)[0], x, y + ch + 6);
+      }
+      y += rh;
+    }
+  }
+
+  // Rodapé em todas as páginas
   const nota = doc.splitTextToSize('Não incluso: frete, serviços extras durante o atendimento e avarias nas peças que impeçam a montagem. Orçamento válido por 7 dias.', W - M * 2);
-  doc.setFontSize(8.5); ink(C.muted);
-  doc.text(nota, M, H - 22);
-  stroke(C.bronze); doc.setLineWidth(0.4); doc.line(M, H - 28, W - M, H - 28);
+  for (let p = 1; p <= doc.getNumberOfPages(); p++) {
+    doc.setPage(p);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); ink(C.muted);
+    doc.text(nota, M, H - 22);
+    stroke(C.bronze); doc.setLineWidth(0.4); doc.line(M, H - 28, W - M, H - 28);
+  }
 
   return doc.output('blob');
 }
