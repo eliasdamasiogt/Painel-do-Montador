@@ -100,13 +100,15 @@ export async function loadAll(userId) {
     .select('*, orcamento_itens(*), ordens_servico(*, os_itens(*))')
     .order('numero', { ascending: false });
   fail(e2);
-  const [tb, lc, dp, pr] = await Promise.all([
+  const [tb, lc, dp, pr, cp, hb] = await Promise.all([
     supabase.from('tabela_referencia').select('*').order('grupo', { ascending: true }).order('ordem', { ascending: true }),
     supabase.from('lancamentos').select('*').order('data', { ascending: false }).order('created_at', { ascending: false }),
     supabase.from('disponibilidade').select('*'),
     supabase.from('prompts').select('*').order('ordem', { ascending: true }).order('created_at', { ascending: true }),
+    supabase.from('compras').select('*').order('created_at', { ascending: true }),
+    supabase.from('habilidades').select('*').order('created_at', { ascending: true }),
   ]);
-  fail(tb.error); fail(lc.error); fail(dp.error); fail(pr.error);
+  fail(tb.error); fail(lc.error); fail(dp.error); fail(pr.error); fail(cp.error); fail(hb.error);
   let logo = null;
   if (p.logo_path) {
     try { logo = await downloadAsDataUrl(p.logo_path); } catch (e) { logo = null; }
@@ -127,6 +129,8 @@ export async function loadAll(userId) {
     tabela: tb.data.map(mapRef),
     lanc: lc.data.map(mapLanc),
     prompts: pr.data.map((r) => ({ id: r.id, titulo: r.titulo, texto: r.texto, ordem: r.ordem })),
+    compras: cp.data.map(mapCompra),
+    habilidades: hb.data.map(mapHab),
     disp: Object.fromEntries(dp.data.map((r) => [r.data, { status: r.status, nota: r.nota || '' }])),
   };
 }
@@ -343,5 +347,45 @@ export async function savePrompt(row) {
 }
 export async function deletePrompt(id) {
   const { error } = await supabase.from('prompts').delete().eq('id', id);
+  fail(error);
+}
+
+/* ---------- compras e investimentos ---------- */
+const mapCompra = (r) => ({ id: r.id, nome: r.nome, valor: Number(r.valor), qtd: r.qtd, recorrente: !!r.recorrente, comprado: !!r.comprado });
+export async function saveCompra(row) {
+  const body = { nome: row.nome, valor: row.valor, qtd: row.qtd, recorrente: row.recorrente };
+  if (row.id) {
+    const { data, error } = await supabase.from('compras').update(body).eq('id', row.id).select().single();
+    fail(error); return mapCompra(data);
+  }
+  const { data, error } = await supabase.from('compras').insert(body).select().single();
+  fail(error); return mapCompra(data);
+}
+export async function setCompraComprado(id, comprado) {
+  const { error } = await supabase.from('compras').update({ comprado }).eq('id', id);
+  fail(error);
+}
+export async function deleteCompra(id) {
+  const { error } = await supabase.from('compras').delete().eq('id', id);
+  fail(error);
+}
+
+/* ---------- habilidades ---------- */
+const mapHab = (r) => ({ id: r.id, nome: r.nome, descricao: r.descricao || '', dominada: !!r.dominada, links: Array.isArray(r.links) ? r.links : [] });
+export async function saveHab(row) {
+  const body = { nome: row.nome, descricao: row.descricao };
+  if (row.id) {
+    const { data, error } = await supabase.from('habilidades').update(body).eq('id', row.id).select().single();
+    fail(error); return mapHab(data);
+  }
+  const { data, error } = await supabase.from('habilidades').insert(body).select().single();
+  fail(error); return mapHab(data);
+}
+export async function patchHab(id, patch) {
+  const { error } = await supabase.from('habilidades').update(patch).eq('id', id);
+  fail(error);
+}
+export async function deleteHab(id) {
+  const { error } = await supabase.from('habilidades').delete().eq('id', id);
   fail(error);
 }
