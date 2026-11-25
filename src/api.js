@@ -267,7 +267,7 @@ export async function approve(b, dataServico) {
     .select()
     .single();
   fail(error);
-  const rows = b.itens.map((i, k) => ({ ordem_id: o.id, ordem: k, nome: i.nome, tipo: i.tipo, minutos_previstos: i.min, foto_path: paths[k] }));
+  const rows = b.itens.map((i, k) => ({ ordem_id: o.id, ordem: k, nome: i.nome, tipo: i.tipo, minutos_previstos: i.min }));
   const { data: its, error: e2 } = await supabase.from('os_itens').insert(rows).select();
   if (e2) {
     await supabase.from('ordens_servico').delete().eq('id', o.id);
