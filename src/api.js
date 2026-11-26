@@ -351,9 +351,9 @@ export async function deletePrompt(id) {
 }
 
 /* ---------- compras e investimentos ---------- */
-const mapCompra = (r) => ({ id: r.id, nome: r.nome, valor: Number(r.valor), qtd: r.qtd, recorrente: !!r.recorrente, comprado: !!r.comprado });
+const mapCompra = (r) => ({ id: r.id, nome: r.nome, valor: Number(r.valor), qtd: r.qtd, recorrente: !!r.recorrente, comprado: !!r.comprado, link: r.link || '' });
 export async function saveCompra(row) {
-  const body = { nome: row.nome, valor: row.valor, qtd: row.qtd, recorrente: row.recorrente };
+  const body = { nome: row.nome, valor: row.valor, qtd: row.qtd, recorrente: row.recorrente, link: row.link || null };
   if (row.id) {
     const { data, error } = await supabase.from('compras').update(body).eq('id', row.id).select().single();
     fail(error); return mapCompra(data);

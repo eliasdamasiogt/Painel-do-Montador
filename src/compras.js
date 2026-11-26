@@ -2,12 +2,18 @@
 import * as api from './api.js';
 
 const tot = (c) => c.valor * c.qtd;
+function normUrl(u) {
+  u = String(u || '').trim(); if (!u) return '';
+  if (!/^https?:\/\//i.test(u)) u = 'https://' + u;
+  try { const x = new URL(u); return /^https?:$/.test(x.protocol) && x.hostname.indexOf('.') > 0 ? x.href : null; } catch (e) { return null; }
+}
+const host = (u) => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch (e) { return u; } };
 const soma = (l) => l.reduce((s, c) => s + tot(c), 0);
 
 function linha(ctx, c) {
   const esc = ctx.esc, brl = ctx.brl;
   return '<div class="trow"><div class="tn"><b>' + esc(c.nome) + '</b><span class="tprice">' + brl(tot(c)) + '</span></div>' +
-    '<div class="tp2"><span class="muted small">' + (c.qtd > 1 ? c.qtd + ' × ' + brl(c.valor) : brl(c.valor)) + (c.recorrente ? ' · todo mês' : '') + '</span>' +
+    '<div class="tp2"><span class="muted small">' + (c.qtd > 1 ? c.qtd + ' × ' + brl(c.valor) : brl(c.valor)) + (c.recorrente ? ' · todo mês' : '') + (c.link ? ' · <a href="' + esc(c.link) + '" target="_blank" rel="noopener noreferrer">Ver produto (' + esc(host(c.link)) + ')</a>' : '') + '</span>' +
     '<span class="row" style="gap:6px">' +
     (c.recorrente ? '' : '<button class="chip" data-a="c-ok" data-id="' + c.id + '">' + (c.comprado ? 'Desfazer' : 'Já comprei') + '</button>') +
     '<button class="chip" data-a="c-edit" data-id="' + c.id + '">Editar</button>' +
@@ -20,6 +26,7 @@ function form(ctx, c) {
     '<label class="field"><span class="lbl">O que preciso</span><input class="in" data-cf="nome" value="' + esc(c.nome) + '" placeholder="Ex.: Parafusadeira, anúncios, bits"></label>' +
     '<div class="grid2"><label class="field"><span class="lbl">Valor (R$)</span><input class="in" inputmode="decimal" data-cf="valor" value="' + (c.valor === '' ? '' : c.valor) + '" placeholder="0,00"></label>' +
     '<label class="field"><span class="lbl">Quantidade</span><input class="in" inputmode="numeric" data-cf="qtd" value="' + c.qtd + '"></label></div>' +
+    '<label class="field"><span class="lbl">Link do produto (opcional)</span><input class="in" inputmode="url" data-cf="link" value="' + esc(c.link || '') + '" placeholder="Cole aqui o link da loja"></label>' +
     '<label class="field"><span class="lbl">Frequência</span><select class="in" data-cf="rec"><option value="0"' + (c.recorrente ? '' : ' selected') + '>Compra única</option><option value="1"' + (c.recorrente ? ' selected' : '') + '>Gasto recorrente (todo mês)</option></select></label>' +
     '<div class="row"><button class="btn sm" data-a="c-save" data-id="' + c.id + '">' + (c.id === 'new' ? 'Adicionar' : 'Salvar') + '</button>' +
     (c.id !== 'new' ? '<button class="btn ghost sm" data-a="c-cancel">Cancelar</button>' : '') + '</div></div>';
@@ -36,7 +43,7 @@ export function render(ctx) {
     '<div class="row" style="justify-content:space-between"><span class="muted small">Compras únicas pendentes</span><b class="num">' + brl(soma(unicas)) + '</b></div>' +
     '<div class="row" style="justify-content:space-between"><span class="muted small">Recorrente por mês</span><b class="num">' + brl(soma(rec)) + '</b></div>' +
     (feitas.length ? '<div class="row" style="justify-content:space-between"><span class="muted small">Já comprado</span><b class="num">' + brl(soma(feitas)) + '</b></div>' : '') + '</div>' +
-    '<div style="margin-top:14px">' + (S.cEdit === 'new' || !S.cEdit ? form(ctx, { id: 'new', nome: '', valor: '', qtd: 1, recorrente: false }) : (edit ? '' : '')) + '</div>' +
+    '<div style="margin-top:14px">' + (S.cEdit === 'new' || !S.cEdit ? form(ctx, { id: 'new', nome: '', valor: '', qtd: 1, recorrente: false, link: '' }) : (edit ? '' : '')) + '</div>' +
     grupo('A comprar', unicas) + grupo('Recorrentes (todo mês)', rec) + grupo('Já comprados', feitas) +
     (S.compras.length ? '' : '<div class="card muted" style="margin-top:12px">Nada cadastrado ainda. Preencha acima o primeiro item que você precisa comprar.</div>');
 }
@@ -58,9 +65,11 @@ export async function click(a, t, ctx) {
     const nome = g('nome').trim(), valor = ctx.num(g('valor')), qtd = parseInt(g('qtd'), 10) || 1;
     if (!nome) { ctx.toast('Informe o que você precisa comprar'); return true; }
     if (!(valor >= 0) || g('valor').trim() === '') { ctx.toast('Informe o valor'); return true; }
+    const link = normUrl(g('link'));
+    if (link === null) { ctx.toast('O link parece inválido. Cole o endereço completo da loja.'); return true; }
     t.disabled = true;
     try {
-      const saved = await api.saveCompra({ id: id === 'new' ? null : id, nome, valor, qtd: Math.min(qtd, 9999), recorrente: g('rec') === '1' });
+      const saved = await api.saveCompra({ id: id === 'new' ? null : id, nome, valor, qtd: Math.min(qtd, 9999), recorrente: g('rec') === '1', link });
       const old = S.compras.filter((x) => x.id === id)[0];
       if (old) { saved.comprado = old.comprado; S.compras[S.compras.indexOf(old)] = saved; } else S.compras.push(saved);
       S.cEdit = null; render(ctx); ctx.toast(id === 'new' ? 'Item adicionado' : 'Item atualizado');
